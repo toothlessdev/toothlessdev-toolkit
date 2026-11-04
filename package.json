@@ -9,6 +9,7 @@
   },
   "scripts": {
     "n8n": "n8n",
+    "deploy:n8n-nodes": "node scripts/deploy-n8n-nodes.mjs",
     "format": "prettier --write packages scripts",
     "format:check": "prettier --check packages scripts --ignore-unknown",
     "typecheck": "pnpm -r --if-present typecheck",

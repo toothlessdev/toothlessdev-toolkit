@@ -115,6 +115,42 @@ describe("buildClaudeCommand", () => {
         );
     });
 
+    describe("jsonSchema", () => {
+        const jsonSchema = '{"type":"object"}';
+
+        test("print 모드에서는 --json-schema 로 넘긴다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                jsonSchema,
+            });
+
+            expect(readOption(commandLineArguments, "--json-schema")).toBe(
+                jsonSchema,
+            );
+        });
+
+        test("background 모드에서는 넘기지 않는다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                executionMode: "background",
+                jsonSchema,
+            });
+
+            expect(commandLineArguments).not.toContain("--json-schema");
+        });
+
+        test.each([
+            ["JSON 이 아닌 값", "{type: object}"],
+            ["배열", "[]"],
+            ["문자열", '"object"'],
+            ["null", "null"],
+        ])("%s 는 거부한다", (_, invalidSchema) => {
+            expect(() =>
+                buildClaudeCommand({ ...request, jsonSchema: invalidSchema }),
+            ).toThrow(InvalidClaudeRequestError);
+        });
+    });
+
     test("UUID 가 아닌 세션 ID 는 거부한다", () => {
         expect(() =>
             buildClaudeCommand({

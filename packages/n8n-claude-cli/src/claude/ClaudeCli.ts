@@ -23,6 +23,7 @@ export interface ClaudeResult {
     readonly result: string;
     readonly sessionId: string;
     readonly deniedTools: readonly string[];
+    readonly structuredOutput?: unknown;
 }
 
 export interface ClaudeBackgroundSession {
@@ -42,6 +43,7 @@ interface ClaudeJsonOutput {
     readonly subtype?: string;
     readonly result?: unknown;
     readonly session_id?: unknown;
+    readonly structured_output?: unknown;
     readonly permission_denials?: ReadonlyArray<{ tool_name?: string }>;
 }
 
@@ -69,7 +71,7 @@ export class ClaudeCli {
         );
         this.assertSucceeded(output);
 
-        return this.interpret(output);
+        return this.interpret(output, command);
     }
 
     /** 세션을 띄우고 바로 돌아옵니다. 세션의 결과와 종료는 기다리지 않습니다. */
@@ -203,7 +205,10 @@ export class ClaudeCli {
         }
     }
 
-    private interpret(output: ProcessOutput): ClaudeResult {
+    private interpret(
+        output: ProcessOutput,
+        command: ClaudeCommand,
+    ): ClaudeResult {
         const parsedOutput = this.parse<ClaudeJsonOutput>(
             output.standardOutput,
         );
@@ -226,6 +231,18 @@ export class ClaudeCli {
             );
         }
 
+        /**
+         * 값이 없는 채로 돌려주면 다음 Switch 노드의 조건이 undefined 가 되어
+         * 오류 없이 fallback 분기로 빠집니다. Additional Arguments 로 넘긴 경우도 함께 잡습니다.
+         */
+        const expectsStructuredOutput =
+            command.commandLineArguments.includes("--json-schema");
+        if (expectsStructuredOutput && parsedOutput.structured_output == null) {
+            throw new ClaudeFailedError(
+                `--json-schema 를 넘겼지만 claude 출력에 structured_output 이 없습니다: ${excerpt(output.standardOutput)}`,
+            );
+        }
+
         const deniedTools = (parsedOutput.permission_denials ?? []).flatMap(
             (denial) => (denial.tool_name ? [denial.tool_name] : []),
         );
@@ -234,6 +251,7 @@ export class ClaudeCli {
             result: parsedOutput.result,
             sessionId: parsedOutput.session_id,
             deniedTools: [...new Set(deniedTools)],
+            structuredOutput: parsedOutput.structured_output ?? undefined,
         };
     }
 

@@ -24,6 +24,7 @@ interface ClaudeCliOptions {
     systemPrompt?: string;
     appendedSystemPrompt?: string;
     maxBudgetUsd?: number;
+    jsonSchema?: string | object;
     timeoutSeconds?: number;
     additionalArguments?: string[];
 }
@@ -61,7 +62,19 @@ async function runClaude(
         result: claudeResult.result,
         sessionId: claudeResult.sessionId,
         deniedTools: [...claudeResult.deniedTools],
+        ...(claudeResult.structuredOutput !== undefined && {
+            structuredOutput: claudeResult.structuredOutput as IDataObject,
+        }),
     };
+}
+
+/** 표현식으로 넣으면 문자열이 아니라 객체로 들어올 수 있습니다. */
+function serializeJsonSchema(jsonSchema?: string | object): string | undefined {
+    if (!jsonSchema) return undefined;
+
+    return typeof jsonSchema === "string"
+        ? jsonSchema
+        : JSON.stringify(jsonSchema);
 }
 
 function parseTools(rawTools: string): string[] {
@@ -79,7 +92,8 @@ export class ClaudeCli implements INodeType {
         icon: "file:claude.svg",
         group: ["transform"],
         version: 1,
-        subtitle: '={{$parameter["workingDirectory"]}}',
+        subtitle:
+            '={{$parameter["executionMode"] === "background" ? "--bg" : "-p"}}',
         description: "로컬 claude CLI 를 격리된 설정으로 실행합니다",
         defaults: { name: "Claude CLI" },
         inputs: [NodeConnectionTypes.Main],
@@ -215,6 +229,17 @@ export class ClaudeCli implements INodeType {
                         default: "",
                     },
                     {
+                        displayName: "JSON Schema",
+                        name: "jsonSchema",
+                        type: "json",
+                        default: "",
+                        description:
+                            "답변이 따라야 할 JSON Schema. 결과는 출력의 structuredOutput 에 담기고, Switch 노드에서 분기할 수 있습니다.",
+                        displayOptions: {
+                            show: { "/executionMode": ["print"] },
+                        },
+                    },
+                    {
                         displayName: "Max Budget (USD)",
                         name: "maxBudgetUsd",
                         type: "number",
@@ -271,6 +296,7 @@ export class ClaudeCli implements INodeType {
                         options.permissionMode ?? DEFAULT_PERMISSION_MODE,
                     maxBudgetUsd:
                         options.maxBudgetUsd ?? DEFAULT_MAX_BUDGET_USD,
+                    jsonSchema: serializeJsonSchema(options.jsonSchema),
                     resumeSessionId: resumeSessionId || undefined,
                     sessionName: options.sessionName,
                     model: options.model,

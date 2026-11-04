@@ -8,6 +8,7 @@ export interface ClaudeRequest {
     readonly tools: readonly string[];
     readonly permissionMode: string;
     readonly maxBudgetUsd: number;
+    readonly jsonSchema?: string;
     readonly resumeSessionId?: string;
     readonly sessionName?: string;
     readonly model?: string;
@@ -27,7 +28,7 @@ const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
 const SESSION_ID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** --bg 는 -p 와 같이 쓸 수 없고, --output-format 과 --max-budget-usd 는 -p 에서만 동작합니다. */
+/** --bg 는 -p 와 같이 쓸 수 없고, --output-format, --max-budget-usd, --json-schema 는 -p 에서만 동작합니다. */
 function buildModeArguments(request: ClaudeRequest): string[] {
     if (request.executionMode === "background") return ["--bg"];
 
@@ -37,7 +38,30 @@ function buildModeArguments(request: ClaudeRequest): string[] {
         "json",
         "--max-budget-usd",
         String(request.maxBudgetUsd),
+        ...(request.jsonSchema ? ["--json-schema", request.jsonSchema] : []),
     ];
+}
+
+function assertValidJsonSchema(jsonSchema: string): void {
+    let parsedSchema: unknown;
+    try {
+        parsedSchema = JSON.parse(jsonSchema);
+    } catch (error) {
+        throw new InvalidClaudeRequestError(
+            `JSON Schema 가 올바른 JSON 이 아닙니다: ${jsonSchema}`,
+            { cause: error },
+        );
+    }
+
+    if (
+        typeof parsedSchema !== "object" ||
+        parsedSchema === null ||
+        Array.isArray(parsedSchema)
+    ) {
+        throw new InvalidClaudeRequestError(
+            `JSON Schema 는 객체여야 합니다: ${jsonSchema}`,
+        );
+    }
 }
 
 function buildOptionalArguments(request: ClaudeRequest): string[] {
@@ -70,6 +94,7 @@ export function buildClaudeCommand(request: ClaudeRequest): ClaudeCommand {
             `Session ID 는 UUID 형식이어야 합니다: ${request.resumeSessionId}`,
         );
     }
+    if (request.jsonSchema) assertValidJsonSchema(request.jsonSchema);
 
     return {
         commandLineArguments: [

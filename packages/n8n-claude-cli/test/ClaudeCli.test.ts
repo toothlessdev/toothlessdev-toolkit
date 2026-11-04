@@ -114,6 +114,59 @@ describe("ClaudeCli", () => {
         ).rejects.toBeInstanceOf(ClaudeTimedOutError);
     });
 
+    describe("--json-schema", () => {
+        const schemaCommand = {
+            commandLineArguments: ["-p", "--json-schema", "{}"],
+            standardInput: "질문",
+        };
+
+        test("structured_output 을 structuredOutput 으로 돌려준다", async () => {
+            const executable = writeFakeClaude(
+                `cat >/dev/null; echo '{"result":"r","session_id":"s","structured_output":{"route":"bug"}}'`,
+            );
+
+            const result = await new ClaudeCli(executable, 5000).run(
+                schemaCommand,
+                temporaryDirectory,
+            );
+            expect(result.structuredOutput).toEqual({ route: "bug" });
+        });
+
+        test.each([
+            ["필드 없음", `{"result":"r","session_id":"s"}`],
+            [
+                "null",
+                `{"result":"r","session_id":"s","structured_output":null}`,
+            ],
+        ])(
+            "structured_output 이 %s 이면 ClaudeFailedError 로 던진다",
+            async (_, output) => {
+                const executable = writeFakeClaude(
+                    `cat >/dev/null; echo '${output}'`,
+                );
+                const running = new ClaudeCli(executable, 5000).run(
+                    schemaCommand,
+                    temporaryDirectory,
+                );
+
+                await expect(running).rejects.toBeInstanceOf(ClaudeFailedError);
+                await expect(running).rejects.toThrow("structured_output");
+            },
+        );
+
+        test("스키마를 안 넘기면 없어도 실패하지 않는다", async () => {
+            const executable = writeFakeClaude(
+                `cat >/dev/null; echo '{"result":"r","session_id":"s"}'`,
+            );
+
+            const result = await new ClaudeCli(executable, 5000).run(
+                command,
+                temporaryDirectory,
+            );
+            expect(result.structuredOutput).toBeUndefined();
+        });
+    });
+
     describe("startBackground", () => {
         const backgroundCommand = {
             commandLineArguments: ["--bg"],

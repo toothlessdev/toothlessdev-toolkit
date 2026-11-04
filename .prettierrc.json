@@ -1,0 +1,9 @@
+{
+  "tabWidth": 4,
+  "overrides": [
+    {
+      "files": ["*.json", "*.yaml", "*.yml"],
+      "options": { "tabWidth": 2 }
+    }
+  ]
+}

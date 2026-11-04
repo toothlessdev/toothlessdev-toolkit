@@ -1,5 +1,24 @@
 {
+  "name": "toothlessdev-toolkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "n8n": "n8n",
+    "format": "prettier --write packages scripts",
+    "format:check": "prettier --check packages scripts --ignore-unknown",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run --passWithNoTests --dir packages"
+  },
   "devDependencies": {
-    "prettier": "^3.6.2"
+    "@types/node": "catalog:",
+    "n8n": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

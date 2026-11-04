@@ -10,6 +10,7 @@
   "scripts": {
     "n8n": "n8n",
     "deploy:n8n-nodes": "node scripts/deploy-n8n-nodes.mjs",
+    "register:n8n-plist": "node scripts/register-n8n-plist.macos.mjs",
     "format": "prettier --write packages scripts",
     "format:check": "prettier --check packages scripts --ignore-unknown",
     "typecheck": "pnpm -r --if-present typecheck",

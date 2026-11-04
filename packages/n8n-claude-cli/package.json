@@ -1,0 +1,25 @@
+{
+  "name": "n8n-claude-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "로컬 claude CLI 를 실행하는 n8n 커스텀 노드",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/nodes/ClaudeCli/claude.svg dist/nodes/ClaudeCli/",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/ClaudeCli/ClaudeCli.node.js"
+    ]
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "n8n-workflow": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

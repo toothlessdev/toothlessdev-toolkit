@@ -1,0 +1,9 @@
+{
+  "name": "beaker",
+  "description": "명세와 구현에서 테스트를 따로 만들어 불일치를 찾는 테스트 생성 스킬",
+  "author": {
+    "name": "toothlessdev",
+    "url": "https://github.com/toothlessdev"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "adhd",
+  "version": "1.0.0",
+  "description": "ADHD 실행 지원 도구 모음: 작업 마비 부수기, 도파민 메뉴, 체크인(바디더블링), 컨텍스트 전환, 흥미 기반 게임화, 시간 감각 교정, 머릿속 비우기. /adhd 자동 라우팅 + 7개 모드 서브커맨드(/adhd:paralysis /adhd:dopamine /adhd:checkin /adhd:switch /adhd:gamify /adhd:timemap /adhd:braindump).",
+  "author": {
+    "name": "toothlessdev",
+    "url": "https://github.com/toothlessdev"
+  },
+  "keywords": [
+    "adhd",
+    "productivity",
+    "focus",
+    "body-doubling",
+    "dopamine",
+    "executive-function",
+    "time-blindness"
+  ],
+  "skills": "./skills",
+  "license": "MIT"
+}

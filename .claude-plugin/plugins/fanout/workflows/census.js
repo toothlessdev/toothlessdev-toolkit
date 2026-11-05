@@ -60,7 +60,8 @@ if (!args || !args.criteria) {
 
 phase('Fanout')
 
-const fanoutResult = await workflow('fanout', {
+// 플러그인 워크플로는 플러그인 이름 아래에 등록되므로 접두사를 붙여 부릅니다.
+const fanoutResult = await workflow('fanout:fanout', {
   items: args.items,
   root: args.root,
   shardSize: args.shardSize,

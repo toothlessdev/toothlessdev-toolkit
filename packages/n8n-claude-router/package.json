@@ -1,0 +1,29 @@
+{
+  "name": "n8n-claude-router",
+  "version": "0.1.0",
+  "private": true,
+  "description": "입력을 넣을 claude 세션을 고르고 메시지를 전달하는 n8n 커스텀 노드",
+  "scripts": {
+    "build": "rm -rf dist && esbuild src/nodes/ClaudeRouter/ClaudeRouter.node.ts --bundle --platform=node --format=cjs --target=node24 --external:n8n-workflow --outbase=src --outdir=dist --log-level=warning && cp src/nodes/ClaudeRouter/router.svg dist/nodes/ClaudeRouter/",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/ClaudeRouter/ClaudeRouter.node.js"
+    ]
+  },
+  "dependencies": {
+    "claude-cli": "workspace:*"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "n8n-workflow": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { SlackSocketConnection } from "../src/slack/SlackSocketConnection";
+import {
+    SlackSocketConnection,
+    type SlackEventSilence,
+} from "../src/slack/SlackSocketConnection";
 import { FakeSlackServer } from "./fakeSlackServer";
 
 /** SocketModeClient 의 재연결 지연이 수 초라 그보다 길게 잡습니다. */
@@ -26,6 +29,7 @@ beforeEach(async () => {
         onError: () => {},
         onConnectionLost,
         onDiagnostic,
+        onEventSilence: () => {},
         reconnectTimeoutMs: 100,
     });
     await connection.start();
@@ -34,6 +38,74 @@ beforeEach(async () => {
 afterEach(async () => {
     await connection.stop();
     await server.stop();
+});
+
+describe("이벤트 끊김 감지", () => {
+    const SILENCE_TIMEOUT_MS = 200;
+    let onEventSilence: ReturnType<
+        typeof vi.fn<(silence: SlackEventSilence) => void>
+    >;
+    let silenceConnection: SlackSocketConnection;
+
+    async function connectWithSilenceTimeout(silenceRepeatIntervalMs = 60_000) {
+        onEventSilence = vi.fn();
+        silenceConnection = new SlackSocketConnection({
+            appToken: "xapp-test",
+            slackApiUrl: server.apiUrl,
+            classifyEvent: () => undefined,
+            onEvent: () => {},
+            onError: () => {},
+            onConnectionLost: () => {},
+            onDiagnostic: () => {},
+            onEventSilence,
+            silenceTimeoutMs: SILENCE_TIMEOUT_MS,
+            silenceRepeatIntervalMs,
+        });
+        await silenceConnection.start();
+    }
+
+    const wait = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
+
+    afterEach(() => silenceConnection.stop());
+
+    test("연결된 채 이벤트가 없으면 앱 ID 와 함께 알린다", async () => {
+        await connectWithSilenceTimeout();
+
+        await vi.waitFor(() => expect(onEventSilence).toHaveBeenCalledOnce());
+
+        const [{ silentMs, appId }] = onEventSilence.mock.calls[0];
+        expect(appId).toBe("AFAKE");
+        expect(silentMs).toBeGreaterThanOrEqual(SILENCE_TIMEOUT_MS);
+    });
+
+    test("필터에 걸러지는 이벤트도 들어오는 동안에는 알리지 않는다", async () => {
+        await connectWithSilenceTimeout();
+
+        for (let eventIndex = 0; eventIndex < 8; eventIndex++) {
+            server.sendEvent(`EvBusy${eventIndex}`, { type: "message" });
+            await wait(50);
+        }
+
+        expect(onEventSilence).not.toHaveBeenCalled();
+    });
+
+    test("끊김이 이어지면 반복 간격마다 다시 알린다", async () => {
+        await connectWithSilenceTimeout(SILENCE_TIMEOUT_MS);
+
+        await vi.waitFor(() =>
+            expect(onEventSilence.mock.calls.length).toBeGreaterThanOrEqual(2),
+        );
+    });
+
+    test("닫은 뒤에는 알리지 않는다", async () => {
+        await connectWithSilenceTimeout();
+        await silenceConnection.stop();
+
+        await wait(SILENCE_TIMEOUT_MS * 2);
+
+        expect(onEventSilence).not.toHaveBeenCalled();
+    });
 });
 
 describe("SlackSocketConnection", () => {

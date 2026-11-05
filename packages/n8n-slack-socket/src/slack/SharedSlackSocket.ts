@@ -8,6 +8,7 @@ import {
 import {
     SlackSocketConnection,
     type SlackEventEnvelope,
+    type SlackEventSilence,
 } from "./SlackSocketConnection";
 
 export interface SlackSourceSubscription {
@@ -20,6 +21,9 @@ export interface SlackSourceSubscription {
     readonly onError: (error: Error) => void;
     readonly onConnectionLost: (error: Error) => void;
     readonly onDiagnostic: (message: string) => void;
+    readonly onEventSilence: (silence: SlackEventSilence) => void;
+    /** 소켓은 앱 토큰당 하나라 이 값은 소켓을 처음 여는 구독의 것만 적용됩니다. */
+    readonly silenceTimeoutMs?: number;
 }
 
 export type UnsubscribeFromSlackSource = () => Promise<void>;
@@ -34,7 +38,11 @@ class SharedSlackSocket {
     private readonly subscriptions = new Set<SlackSourceSubscription>();
     private readonly connection: SlackSocketConnection;
 
-    constructor(appToken: string, slackApiUrl: string | undefined) {
+    constructor({
+        appToken,
+        slackApiUrl,
+        silenceTimeoutMs,
+    }: SlackSourceSubscription) {
         this.connection = new SlackSocketConnection({
             appToken,
             slackApiUrl,
@@ -44,6 +52,8 @@ class SharedSlackSocket {
             onConnectionLost: (error) => this.notifyConnectionLost(error),
             onDiagnostic: (message) =>
                 this.anySubscription()?.onDiagnostic(message),
+            onEventSilence: (silence) => this.notifyEventSilence(silence),
+            silenceTimeoutMs,
         });
         this.ready = this.connection.start();
     }
@@ -97,6 +107,14 @@ class SharedSlackSocket {
         }
     }
 
+    private notifyEventSilence(silence: SlackEventSilence): void {
+        for (const subscription of this.subscriptions) {
+            if (subscription.source.kind === "eventSilence") {
+                subscription.onEventSilence(silence);
+            }
+        }
+    }
+
     private anySubscription(): SlackSourceSubscription | undefined {
         const [firstSubscription] = this.subscriptions;
         return firstSubscription;
@@ -119,7 +137,7 @@ export async function subscribeToSlackSource(
 
     const socket =
         socketsByConnectionKey.get(connectionKey) ??
-        new SharedSlackSocket(appToken, slackApiUrl);
+        new SharedSlackSocket(subscription);
     socketsByConnectionKey.set(connectionKey, socket);
     socket.add(subscription);
 

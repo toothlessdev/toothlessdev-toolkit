@@ -91,6 +91,31 @@ afterEach(async () => {
 });
 
 describe("SlackSocketTrigger", () => {
+    test("Event Silence 는 이벤트가 끊기면 워크플로를 실행하고 메시지로는 실행하지 않는다", async () => {
+        vi.stubEnv("N8N_SLACK_SOCKET_SILENCE_TIMEOUT_MS", "200");
+        const silenceEmit = vi.fn();
+        await activate({ source: "eventSilence" }, silenceEmit);
+
+        await vi.waitFor(() => expect(silenceEmit).toHaveBeenCalledOnce());
+
+        expect(silenceEmit.mock.calls[0][0][0][0].json).toEqual({
+            type: "event_silence",
+            silentMinutes: 0,
+            appId: "AFAKE",
+        });
+    });
+
+    test("Event Silence 는 메시지 소스와 소켓을 함께 써도 메시지를 받지 않는다", async () => {
+        const silenceEmit = vi.fn();
+        await activate();
+        await activate({ source: "eventSilence" }, silenceEmit);
+        server.sendEvent("EvShared", mention);
+
+        await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+
+        expect(silenceEmit).not.toHaveBeenCalled();
+    });
+
     test("조건에 맞는 이벤트를 워크플로로 보내고 ack 한다", async () => {
         await activate();
         const envelopeId = server.sendEvent("Ev1", mention);

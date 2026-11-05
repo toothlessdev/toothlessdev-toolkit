@@ -53,6 +53,8 @@ function readSource(trigger: ITriggerFunctions): SlackSource {
                 allowedBotIds: readIds("allowedBotIds"),
                 channelIds: readIds("channelIds"),
             };
+        case "eventSilence":
+            return { kind };
     }
 }
 
@@ -93,6 +95,12 @@ export class SlackSocketTrigger implements INodeType {
                         name: "Bot Messages",
                         value: "botMessages",
                         description: "지정한 채널에서 허용한 봇의 메시지",
+                    },
+                    {
+                        name: "Event Silence",
+                        value: "eventSilence",
+                        description:
+                            "소켓은 연결돼 있는데 이벤트가 15분째 0건일 때 한 번, 이후 1시간마다 실행합니다. Slack 이 Enable Events 를 끈 경우를 알아채는 데 씁니다.",
                     },
                 ],
             },
@@ -177,6 +185,21 @@ export class SlackSocketTrigger implements INodeType {
             onError: (error) => this.logger.error(error.message),
             onConnectionLost: (error) => this.emitError(error),
             onDiagnostic: (message) => this.logger.info(message),
+            onEventSilence: ({ silentMs, appId }) => {
+                this.emit([
+                    this.helpers.returnJsonArray([
+                        {
+                            type: "event_silence",
+                            silentMinutes: Math.round(silentMs / 60_000),
+                            appId,
+                        },
+                    ]),
+                ]);
+            },
+            // 가짜 Slack 서버로 알림 경로를 검증할 때만 씁니다.
+            silenceTimeoutMs:
+                Number(process.env.N8N_SLACK_SOCKET_SILENCE_TIMEOUT_MS) ||
+                undefined,
         });
 
         return { closeFunction: unsubscribe };

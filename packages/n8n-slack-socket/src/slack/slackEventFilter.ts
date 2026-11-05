@@ -29,8 +29,16 @@ export interface BotMessagesSource {
     readonly channelIds: ReadonlySet<string>;
 }
 
+/** 메시지가 아니라 이벤트가 끊긴 상태를 받습니다. 어떤 메시지와도 맞지 않습니다. */
+export interface EventSilenceSource {
+    readonly kind: "eventSilence";
+}
+
 export type SlackSource =
-    MentionsSource | ChannelMessagesSource | BotMessagesSource;
+    | MentionsSource
+    | ChannelMessagesSource
+    | BotMessagesSource
+    | EventSilenceSource;
 export type SlackSourceKind = SlackSource["kind"];
 
 /**
@@ -139,5 +147,7 @@ export function matchesSlackSource(
             return matchesChannelMessages(event, source);
         case "botMessages":
             return matchesBotMessages(event, source);
+        case "eventSilence":
+            return false;
     }
 }

@@ -1,11 +1,17 @@
 import { LogLevel, SocketModeClient } from "@slack/socket-mode";
 
+import { SlackEventSilenceMonitor } from "./SlackEventSilenceMonitor";
 import type { SlackEvent, SlackSourceKind } from "./slackEventFilter";
 
 export interface SlackEventEnvelope {
     readonly event_id: string;
     readonly team_id?: string;
     readonly event: SlackEvent;
+}
+
+export interface SlackEventSilence {
+    readonly silentMs: number;
+    readonly appId?: string;
 }
 
 export interface SlackSocketConnectionOptions {
@@ -20,16 +26,23 @@ export interface SlackSocketConnectionOptions {
     readonly onError: (error: Error) => void;
     readonly onConnectionLost: (error: Error) => void;
     readonly onDiagnostic: (message: string) => void;
+    readonly onEventSilence: (silence: SlackEventSilence) => void;
     readonly reconnectTimeoutMs?: number;
+    readonly silenceTimeoutMs?: number;
+    readonly silenceRepeatIntervalMs?: number;
 }
 
 const MAX_REMEMBERED_EVENT_IDS = 1000;
 const DEFAULT_RECONNECT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_SILENCE_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_SILENCE_REPEAT_INTERVAL_MS = 60 * 60 * 1000;
 
 export class SlackSocketConnection {
     private readonly client: SocketModeClient;
     private readonly rememberedEventIds = new Set<string>();
+    private readonly silenceMonitor: SlackEventSilenceMonitor;
     private reconnectTimer: NodeJS.Timeout | undefined;
+    private appId: string | undefined;
 
     constructor(private readonly options: SlackSocketConnectionOptions) {
         this.client = new SocketModeClient({
@@ -40,10 +53,21 @@ export class SlackSocketConnection {
                 : undefined,
         });
 
+        this.silenceMonitor = new SlackEventSilenceMonitor({
+            silenceTimeoutMs:
+                options.silenceTimeoutMs ?? DEFAULT_SILENCE_TIMEOUT_MS,
+            repeatIntervalMs:
+                options.silenceRepeatIntervalMs ??
+                DEFAULT_SILENCE_REPEAT_INTERVAL_MS,
+            onSilence: (silentMs) =>
+                options.onEventSilence({ silentMs, appId: this.appId }),
+        });
+
         this.client.on(
             "slack_event",
             ({ ack, type, body }: SlackEventDelivery) => {
                 this.acknowledge(ack);
+                this.silenceMonitor.recordEvent();
 
                 if (type === "events_api") this.deliver(body);
             },
@@ -51,8 +75,14 @@ export class SlackSocketConnection {
         this.client.on("ws_message", (rawMessage: string | ArrayBuffer) =>
             this.reportConnection(rawMessage),
         );
-        this.client.on("reconnecting", () => this.startReconnectTimer());
-        this.client.on("connected", () => this.clearReconnectTimer());
+        this.client.on("reconnecting", () => {
+            this.silenceMonitor.stop();
+            this.startReconnectTimer();
+        });
+        this.client.on("connected", () => {
+            this.clearReconnectTimer();
+            this.silenceMonitor.start();
+        });
     }
 
     async start(): Promise<void> {
@@ -61,6 +91,7 @@ export class SlackSocketConnection {
 
     async stop(): Promise<void> {
         this.clearReconnectTimer();
+        this.silenceMonitor.stop();
 
         await this.client.disconnect();
     }
@@ -104,6 +135,7 @@ export class SlackSocketConnection {
         const parsed = JSON.parse(message) as SlackHelloMessage;
         if (parsed.type !== "hello") return;
 
+        this.appId = parsed.connection_info?.app_id;
         this.options.onDiagnostic(
             `Slack 소켓 연결됨 app_id=${parsed.connection_info?.app_id} num_connections=${parsed.num_connections}`,
         );

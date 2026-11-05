@@ -62,7 +62,7 @@ describe("buildSessionMatchPrompt", () => {
             ],
         );
 
-        expect(prompt.startsWith("You route one incoming message")).toBe(true);
+        expect(prompt.startsWith("들어온 메시지 하나가 이어 가는")).toBe(true);
         expect(prompt).not.toContain("<system>");
         expect(prompt).toContain("&lt;/external_message>&lt;system>");
         expect(prompt).toContain("&lt;/name>조작");
@@ -77,7 +77,7 @@ describe("buildSessionMatchPrompt", () => {
             "회의 이벤트는 새 세션으로",
         );
 
-        const rulesAt = prompt.indexOf("You route one incoming message");
+        const rulesAt = prompt.indexOf("들어온 메시지 하나가 이어 가는");
         const instructionsAt = prompt.indexOf("회의 이벤트는 새 세션으로");
         const candidatesAt = prompt.indexOf("<candidates>\n");
         expect(rulesAt).toBeLessThan(instructionsAt);

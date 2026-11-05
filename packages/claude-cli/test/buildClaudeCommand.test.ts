@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
     buildClaudeCommand,
     type ClaudeRequest,
-} from "../src/claude/buildClaudeCommand";
-import { InvalidClaudeRequestError } from "../src/claude/ClaudeError";
+} from "../src/buildClaudeCommand";
+import { InvalidClaudeRequestError } from "../src/ClaudeError";
 
 const request: ClaudeRequest = {
     executionMode: "print",
@@ -23,7 +23,36 @@ function readOption(
 }
 
 describe("buildClaudeCommand", () => {
-    test("격리 옵션을 항상 넣는다", () => {
+    test("* 는 전체 도구를 뜻하는 default 로 넘긴다", () => {
+        const { commandLineArguments } = buildClaudeCommand({
+            ...request,
+            tools: ["*"],
+        });
+
+        expect(readOption(commandLineArguments, "--tools")).toBe("default");
+    });
+
+    test("사용자 설정을 상속하면 격리 옵션을 넣지 않는다", () => {
+        const { commandLineArguments } = buildClaudeCommand({
+            ...request,
+            shouldInheritUserConfig: true,
+        });
+
+        expect(commandLineArguments).not.toContain("--strict-mcp-config");
+        expect(commandLineArguments).not.toContain("--mcp-config");
+        expect(commandLineArguments).not.toContain("--setting-sources");
+    });
+
+    test("비용 상한이 0 이면 --max-budget-usd 를 넣지 않는다", () => {
+        const { commandLineArguments } = buildClaudeCommand({
+            ...request,
+            maxBudgetUsd: 0,
+        });
+
+        expect(commandLineArguments).not.toContain("--max-budget-usd");
+    });
+
+    test("격리 옵션을 기본으로 넣는다", () => {
         const { commandLineArguments } = buildClaudeCommand(request);
 
         expect(readOption(commandLineArguments, "--permission-mode")).toBe(
@@ -113,6 +142,41 @@ describe("buildClaudeCommand", () => {
         expect(commandLineArguments.slice(-additionalArguments.length)).toEqual(
             additionalArguments,
         );
+    });
+
+    describe("isRemoteControlEnabled", () => {
+        test("background 모드에서 켜면 --settings 로 넘긴다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                executionMode: "background",
+                isRemoteControlEnabled: true,
+            });
+
+            expect(readOption(commandLineArguments, "--settings")).toBe(
+                '{"remoteControlAtStartup":true}',
+            );
+            expect(readOption(commandLineArguments, "--setting-sources")).toBe(
+                "",
+            );
+        });
+
+        test("끄면 넘기지 않는다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                executionMode: "background",
+            });
+
+            expect(commandLineArguments).not.toContain("--settings");
+        });
+
+        test("print 모드에서는 켜도 넘기지 않는다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                isRemoteControlEnabled: true,
+            });
+
+            expect(commandLineArguments).not.toContain("--settings");
+        });
     });
 
     describe("jsonSchema", () => {

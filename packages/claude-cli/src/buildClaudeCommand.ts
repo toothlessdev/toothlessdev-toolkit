@@ -9,6 +9,9 @@ export interface ClaudeRequest {
     readonly permissionMode: string;
     readonly maxBudgetUsd: number;
     readonly jsonSchema?: string;
+    readonly isRemoteControlEnabled?: boolean;
+    /** 켜면 사용자의 MCP 서버, 스킬, 훅, 설정을 그대로 읽습니다. 외부 입력을 넘길 때는 위험합니다. */
+    readonly shouldInheritUserConfig?: boolean;
     readonly resumeSessionId?: string;
     readonly sessionName?: string;
     readonly model?: string;
@@ -25,19 +28,55 @@ export interface ClaudeCommand {
 
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
 
+/**
+ * 빈 --setting-sources 는 사용자 설정의 remoteControlAtStartup 도 읽지 않아서
+ * 세션이 Claude Desktop 사이드바에 뜨지 않습니다. 이 값만 따로 넘겨 다시 켭니다.
+ */
+const REMOTE_CONTROL_SETTINGS = JSON.stringify({
+    remoteControlAtStartup: true,
+});
+
+const ALL_TOOLS = "*";
+
+/** claude CLI 는 --tools "*" 를 오류 없이 도구 0개로 처리합니다. 전체 도구를 뜻하는 값은 default 입니다. */
+function buildToolsArgument(tools: readonly string[]): string {
+    return tools.includes(ALL_TOOLS) ? "default" : tools.join(",");
+}
+
+function buildIsolationArguments(request: ClaudeRequest): string[] {
+    if (request.shouldInheritUserConfig) return [];
+
+    return [
+        "--strict-mcp-config",
+        "--mcp-config",
+        EMPTY_MCP_CONFIG,
+        "--setting-sources",
+        "",
+    ];
+}
+
 const SESSION_ID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** --bg 는 -p 와 같이 쓸 수 없고, --output-format, --max-budget-usd, --json-schema 는 -p 에서만 동작합니다. */
 function buildModeArguments(request: ClaudeRequest): string[] {
-    if (request.executionMode === "background") return ["--bg"];
+    if (request.executionMode === "background") {
+        return [
+            "--bg",
+            ...(request.isRemoteControlEnabled
+                ? ["--settings", REMOTE_CONTROL_SETTINGS]
+                : []),
+        ];
+    }
 
     return [
         "-p",
         "--output-format",
         "json",
-        "--max-budget-usd",
-        String(request.maxBudgetUsd),
+        // 0 은 상한 없음으로 다룹니다.
+        ...(request.maxBudgetUsd > 0
+            ? ["--max-budget-usd", String(request.maxBudgetUsd)]
+            : []),
         ...(request.jsonSchema ? ["--json-schema", request.jsonSchema] : []),
     ];
 }
@@ -102,12 +141,8 @@ export function buildClaudeCommand(request: ClaudeRequest): ClaudeCommand {
             "--permission-mode",
             request.permissionMode,
             "--tools",
-            request.tools.join(","),
-            "--strict-mcp-config",
-            "--mcp-config",
-            EMPTY_MCP_CONFIG,
-            "--setting-sources",
-            "",
+            buildToolsArgument(request.tools),
+            ...buildIsolationArguments(request),
             ...buildOptionalArguments(request),
             ...(request.additionalArguments ?? []),
         ],

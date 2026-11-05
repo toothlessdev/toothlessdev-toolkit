@@ -4,7 +4,7 @@
   "private": true,
   "description": "로컬 claude CLI 를 실행하는 n8n 커스텀 노드",
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/nodes/ClaudeCli/claude.svg dist/nodes/ClaudeCli/",
+    "build": "rm -rf dist && esbuild src/nodes/ClaudeCli/ClaudeCli.node.ts --bundle --platform=node --format=cjs --target=node24 --external:n8n-workflow --outbase=src --outdir=dist --log-level=warning && cp src/nodes/ClaudeCli/claude.svg dist/nodes/ClaudeCli/",
     "typecheck": "tsc -p tsconfig.json"
   },
   "n8n": {
@@ -13,13 +13,16 @@
       "dist/nodes/ClaudeCli/ClaudeCli.node.js"
     ]
   },
+  "dependencies": {
+    "claude-cli": "workspace:*"
+  },
   "peerDependencies": {
     "n8n-workflow": "*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "esbuild": "catalog:",
     "n8n-workflow": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }

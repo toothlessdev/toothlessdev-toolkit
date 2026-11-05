@@ -10,10 +10,10 @@ import {
 
 import {
     buildClaudeCommand,
+    ClaudeCli as ClaudeCliRunner,
     type ClaudeCommand,
     type ClaudeExecutionMode,
-} from "../../claude/buildClaudeCommand";
-import { ClaudeCli as ClaudeCliRunner } from "../../claude/ClaudeCli";
+} from "claude-cli";
 
 interface ClaudeCliOptions {
     executable?: string;
@@ -25,6 +25,8 @@ interface ClaudeCliOptions {
     appendedSystemPrompt?: string;
     maxBudgetUsd?: number;
     jsonSchema?: string | object;
+    isRemoteControlEnabled?: boolean;
+    shouldInheritUserConfig?: boolean;
     timeoutSeconds?: number;
     additionalArguments?: string[];
 }
@@ -143,7 +145,7 @@ export class ClaudeCli implements INodeType {
                 type: "string",
                 default: "Read,Grep,Glob",
                 description:
-                    "쉼표로 구분한 사용 가능 도구. Permission Mode 가 dontAsk 면 쓰기 도구는 넣어도 거부되고 Print 모드에서 deniedTools 로 보고됩니다.",
+                    "쉼표로 구분한 사용 가능 도구. * 는 전체 내장 도구입니다. Permission Mode 가 dontAsk 면 쓰기 도구는 넣어도 거부되고 Print 모드에서 deniedTools 로 보고됩니다.",
             },
             {
                 displayName: "Resume Session ID",
@@ -229,6 +231,25 @@ export class ClaudeCli implements INodeType {
                         default: "",
                     },
                     {
+                        displayName: "Remote Control",
+                        name: "isRemoteControlEnabled",
+                        type: "boolean",
+                        default: false,
+                        description:
+                            "세션을 Remote Control 로 띄웁니다. 켜야 Claude Desktop 사이드바에 표시됩니다.",
+                        displayOptions: {
+                            show: { "/executionMode": ["background"] },
+                        },
+                    },
+                    {
+                        displayName: "Inherit User Config",
+                        name: "shouldInheritUserConfig",
+                        type: "boolean",
+                        default: false,
+                        description:
+                            "내 MCP 서버, 스킬, 훅, 설정을 그대로 씁니다. 프롬프트에 외부 입력이 들어가면 그 글이 내 권한으로 실행될 수 있습니다.",
+                    },
+                    {
                         displayName: "JSON Schema",
                         name: "jsonSchema",
                         type: "json",
@@ -245,6 +266,8 @@ export class ClaudeCli implements INodeType {
                         type: "number",
                         typeOptions: { minValue: 0, numberPrecision: 2 },
                         default: DEFAULT_MAX_BUDGET_USD,
+                        description:
+                            "호출 한 번의 비용 상한. 0 이면 상한 없이 실행합니다.",
                         displayOptions: {
                             show: { "/executionMode": ["print"] },
                         },
@@ -297,6 +320,8 @@ export class ClaudeCli implements INodeType {
                     maxBudgetUsd:
                         options.maxBudgetUsd ?? DEFAULT_MAX_BUDGET_USD,
                     jsonSchema: serializeJsonSchema(options.jsonSchema),
+                    isRemoteControlEnabled: options.isRemoteControlEnabled,
+                    shouldInheritUserConfig: options.shouldInheritUserConfig,
                     resumeSessionId: resumeSessionId || undefined,
                     sessionName: options.sessionName,
                     model: options.model,

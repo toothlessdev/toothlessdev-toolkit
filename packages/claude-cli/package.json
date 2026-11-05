@@ -1,0 +1,17 @@
+{
+  "name": "claude-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "claude CLI 를 격리된 설정으로 실행하는 라이브러리",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

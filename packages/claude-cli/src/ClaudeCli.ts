@@ -31,6 +31,31 @@ export interface ClaudeBackgroundSession {
     readonly sessionId: string;
 }
 
+export interface ClaudeToolCall {
+    readonly name: string;
+    readonly input: Readonly<Record<string, unknown>>;
+    readonly isError: boolean;
+    readonly resultText: string;
+}
+
+interface StreamContentBlock {
+    readonly type?: string;
+    readonly id?: string;
+    readonly name?: string;
+    readonly input?: Record<string, unknown>;
+    readonly tool_use_id?: string;
+    readonly is_error?: boolean;
+    readonly content?: unknown;
+}
+
+interface StreamEvent {
+    readonly type?: string;
+    readonly is_error?: boolean;
+    readonly subtype?: string;
+    readonly result?: unknown;
+    readonly message?: { readonly content?: StreamContentBlock[] | string };
+}
+
 interface ProcessOutput {
     readonly exitCode: number | null;
     readonly signal: NodeJS.Signals | null;
@@ -72,6 +97,47 @@ export class ClaudeCli {
         this.assertSucceeded(output);
 
         return this.interpret(output, command);
+    }
+
+    /**
+     * 실제로 호출된 도구와 결과를 돌려줍니다. 모델이 쓴 답이 아니라 호출 기록을 봐야
+     * 외부 메시지에 속은 모델이 거짓으로 보고해도 검증할 수 있습니다.
+     * 명령에 --output-format stream-json --verbose 가 있어야 합니다.
+     */
+    async runCollectingToolCalls(
+        command: ClaudeCommand,
+        workingDirectory: string,
+        cancelSignal?: AbortSignal,
+    ): Promise<ClaudeToolCall[]> {
+        const output = await this.execute(
+            command,
+            workingDirectory,
+            cancelSignal,
+        );
+        this.assertSucceeded(output);
+
+        const events = output.standardOutput
+            .split("\n")
+            .filter((line) => line.trim() !== "")
+            .map((line) => this.parse<StreamEvent>(line));
+
+        const resultEvent = events.find((event) => event.type === "result");
+        if (!resultEvent) {
+            throw new ClaudeFailedError(
+                `claude 출력에 result 이벤트가 없습니다: ${excerpt(output.standardOutput)}`,
+            );
+        }
+        if (resultEvent.is_error) {
+            const detail =
+                typeof resultEvent.result === "string"
+                    ? resultEvent.result
+                    : (resultEvent.subtype ?? "알 수 없는 오류");
+            throw new ClaudeFailedError(
+                `claude 가 오류를 반환했습니다: ${excerpt(detail)}`,
+            );
+        }
+
+        return collectToolCalls(events);
     }
 
     /** 세션을 띄우고 바로 돌아옵니다. 세션의 결과와 종료는 기다리지 않습니다. */
@@ -265,4 +331,41 @@ export class ClaudeCli {
             );
         }
     }
+}
+
+function contentBlocks(event: StreamEvent): StreamContentBlock[] {
+    const content = event.message?.content;
+
+    return Array.isArray(content) ? content : [];
+}
+
+function toolResultText(content: unknown): string {
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+
+    return (content as Array<{ text?: unknown }>)
+        .map((block) => (typeof block.text === "string" ? block.text : ""))
+        .join("");
+}
+
+function collectToolCalls(events: readonly StreamEvent[]): ClaudeToolCall[] {
+    const blocks = events.flatMap(contentBlocks);
+    const resultByToolUseId = new Map(
+        blocks
+            .filter((block) => block.type === "tool_result")
+            .map((block) => [block.tool_use_id, block]),
+    );
+
+    return blocks
+        .filter((block) => block.type === "tool_use")
+        .map((block) => {
+            const result = resultByToolUseId.get(block.id);
+
+            return {
+                name: block.name ?? "",
+                input: block.input ?? {},
+                isError: result?.is_error === true,
+                resultText: toolResultText(result?.content),
+            };
+        });
 }

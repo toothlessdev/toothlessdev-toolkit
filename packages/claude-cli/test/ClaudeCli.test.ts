@@ -4,12 +4,12 @@ import path from "node:path";
 
 import { afterAll, describe, expect, test } from "vitest";
 
-import { ClaudeCli } from "../src/claude/ClaudeCli";
+import { ClaudeCli } from "../src/ClaudeCli";
 import {
     ClaudeCancelledError,
     ClaudeFailedError,
     ClaudeTimedOutError,
-} from "../src/claude/ClaudeError";
+} from "../src/ClaudeError";
 
 const temporaryDirectory = mkdtempSync(path.join(tmpdir(), "claude-cli-test-"));
 let scriptCount = 0;

@@ -4,16 +4,44 @@ export interface SlackEvent {
     readonly text?: string;
     readonly subtype?: string;
     readonly bot_id?: string;
+    readonly channel?: string;
     readonly [field: string]: unknown;
 }
 
-export interface SlackEventFilter {
-    /** 비어 있으면 모든 이벤트 유형을 통과시킵니다. */
-    readonly eventTypes: ReadonlySet<string>;
+export interface MentionsSource {
+    readonly kind: "mentions";
     readonly mentionedUserId?: string;
-    /** 비어 있으면 모든 발신자를 통과시킵니다. */
+    readonly mentionedUserGroupIds: ReadonlySet<string>;
+    /** 비어 있으면 모든 사람을 통과시킵니다. */
     readonly allowedSenderIds: ReadonlySet<string>;
 }
+
+export interface ChannelMessagesSource {
+    readonly kind: "channelMessages";
+    readonly channelIds: ReadonlySet<string>;
+    /** 비어 있으면 모든 사람을 통과시킵니다. */
+    readonly allowedSenderIds: ReadonlySet<string>;
+}
+
+export interface BotMessagesSource {
+    readonly kind: "botMessages";
+    readonly allowedBotIds: ReadonlySet<string>;
+    readonly channelIds: ReadonlySet<string>;
+}
+
+export type SlackSource =
+    MentionsSource | ChannelMessagesSource | BotMessagesSource;
+export type SlackSourceKind = SlackSource["kind"];
+
+/**
+ * 지정 채널의 멘션은 mentions 와 channelMessages 를 모두 만족합니다.
+ * 앞선 종류에만 보내야 같은 메시지로 세션이 두 개 뜨지 않습니다.
+ */
+export const SLACK_SOURCE_PRIORITY: readonly SlackSourceKind[] = [
+    "botMessages",
+    "mentions",
+    "channelMessages",
+];
 
 /** 수정, 삭제 같은 subtype 까지 받으면 메시지를 고칠 때마다 워크플로가 다시 실행됩니다. */
 const HUMAN_MESSAGE_SUBTYPES: ReadonlySet<string> = new Set([
@@ -21,7 +49,8 @@ const HUMAN_MESSAGE_SUBTYPES: ReadonlySet<string> = new Set([
     "thread_broadcast",
 ]);
 
-function isHumanEvent(event: SlackEvent): boolean {
+/** 봇은 botMessages 로만 받습니다. 워크플로의 답글이 다시 워크플로를 실행하는 무한 루프를 막습니다. */
+function isHumanMessage(event: SlackEvent): boolean {
     if (event.bot_id || !event.user) return false;
 
     return (
@@ -29,28 +58,86 @@ function isHumanEvent(event: SlackEvent): boolean {
     );
 }
 
+function isAllowedSender(
+    event: SlackEvent,
+    allowedSenderIds: ReadonlySet<string>,
+): boolean {
+    return allowedSenderIds.size === 0 || allowedSenderIds.has(event.user!);
+}
+
+function isInChannels(
+    event: SlackEvent,
+    channelIds: ReadonlySet<string>,
+): boolean {
+    return event.channel !== undefined && channelIds.has(event.channel);
+}
+
 function mentionsUser(text: string, userId: string): boolean {
     return text.includes(`<@${userId}>`) || text.includes(`<@${userId}|`);
 }
 
-/** 봇 이벤트는 설정과 무관하게 거릅니다. 워크플로의 답글이 다시 워크플로를 실행하는 무한 루프를 막습니다. */
-export function matchesSlackEventFilter(
-    event: SlackEvent,
-    filter: SlackEventFilter,
-): boolean {
-    if (filter.eventTypes.size > 0 && !filter.eventTypes.has(event.type)) {
-        return false;
-    }
-    if (!isHumanEvent(event)) return false;
-    if (
-        filter.mentionedUserId &&
-        !mentionsUser(event.text ?? "", filter.mentionedUserId)
-    ) {
-        return false;
-    }
+function mentionsUserGroup(text: string, groupId: string): boolean {
+    return (
+        text.includes(`<!subteam^${groupId}>`) ||
+        text.includes(`<!subteam^${groupId}|`)
+    );
+}
+
+function matchesMentions(event: SlackEvent, source: MentionsSource): boolean {
+    const text = event.text ?? "";
+    const isMentioned =
+        (source.mentionedUserId !== undefined &&
+            mentionsUser(text, source.mentionedUserId)) ||
+        [...source.mentionedUserGroupIds].some((groupId) =>
+            mentionsUserGroup(text, groupId),
+        );
 
     return (
-        filter.allowedSenderIds.size === 0 ||
-        filter.allowedSenderIds.has(event.user!)
+        isHumanMessage(event) &&
+        isMentioned &&
+        isAllowedSender(event, source.allowedSenderIds)
     );
+}
+
+function matchesChannelMessages(
+    event: SlackEvent,
+    source: ChannelMessagesSource,
+): boolean {
+    return (
+        isHumanMessage(event) &&
+        isInChannels(event, source.channelIds) &&
+        isAllowedSender(event, source.allowedSenderIds)
+    );
+}
+
+function matchesBotMessages(
+    event: SlackEvent,
+    source: BotMessagesSource,
+): boolean {
+    const isOriginalBotMessage =
+        event.subtype === undefined || event.subtype === "bot_message";
+
+    return (
+        isOriginalBotMessage &&
+        event.thread_ts === undefined &&
+        event.bot_id !== undefined &&
+        source.allowedBotIds.has(event.bot_id) &&
+        isInChannels(event, source.channelIds)
+    );
+}
+
+export function matchesSlackSource(
+    event: SlackEvent,
+    source: SlackSource,
+): boolean {
+    if (event.type !== "message") return false;
+
+    switch (source.kind) {
+        case "mentions":
+            return matchesMentions(event, source);
+        case "channelMessages":
+            return matchesChannelMessages(event, source);
+        case "botMessages":
+            return matchesBotMessages(event, source);
+    }
 }

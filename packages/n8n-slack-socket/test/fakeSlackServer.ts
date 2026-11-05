@@ -99,6 +99,12 @@ export class FakeSlackServer {
             const { envelope_id: envelopeId } = JSON.parse(data.toString());
             if (envelopeId) this.acknowledgedEnvelopeIds.push(envelopeId);
         });
-        client.send(JSON.stringify({ type: "hello", num_connections: 1 }));
+        client.send(
+            JSON.stringify({
+                type: "hello",
+                num_connections: 1,
+                connection_info: { app_id: "AFAKE" },
+            }),
+        );
     }
 }

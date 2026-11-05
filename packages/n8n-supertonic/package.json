@@ -1,0 +1,26 @@
+{
+  "name": "n8n-supertonic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "로컬 supertonic CLI 로 텍스트를 음성 파일로 만드는 n8n 커스텀 노드",
+  "scripts": {
+    "build": "rm -rf dist && esbuild src/nodes/Supertonic/Supertonic.node.ts --bundle --platform=node --format=cjs --target=node24 --external:n8n-workflow --outbase=src --outdir=dist --log-level=warning && cp src/nodes/Supertonic/supertonic.svg dist/nodes/Supertonic/",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/Supertonic/Supertonic.node.js"
+    ]
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "n8n-workflow": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

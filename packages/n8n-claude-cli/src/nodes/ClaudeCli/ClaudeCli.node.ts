@@ -91,7 +91,7 @@ export class ClaudeCli implements INodeType {
     description: INodeTypeDescription = {
         displayName: "Claude CLI",
         name: "claudeCli",
-        icon: "file:claude.svg",
+        icon: "file:claude-logo.svg",
         group: ["transform"],
         version: 1,
         subtitle:

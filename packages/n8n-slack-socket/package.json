@@ -4,7 +4,7 @@
   "private": true,
   "description": "Slack Socket Mode 이벤트로 워크플로를 시작하는 n8n 트리거 노드",
   "scripts": {
-    "build": "rm -rf dist && esbuild src/nodes/SlackSocketTrigger/SlackSocketTrigger.node.ts src/credentials/SlackSocketApi.credentials.ts --bundle --platform=node --format=cjs --target=node24 --external:n8n-workflow --outbase=src --outdir=dist --log-level=warning && cp src/nodes/SlackSocketTrigger/slack.svg dist/nodes/SlackSocketTrigger/",
+    "build": "rm -rf dist && esbuild src/nodes/SlackSocketTrigger/SlackSocketTrigger.node.ts src/credentials/SlackSocketApi.credentials.ts --bundle --platform=node --format=cjs --target=node24 --external:n8n-workflow --outbase=src --outdir=dist --log-level=warning && cp src/nodes/SlackSocketTrigger/slack-logo.svg dist/nodes/SlackSocketTrigger/",
     "typecheck": "tsc -p tsconfig.json"
   },
   "n8n": {

@@ -63,7 +63,7 @@ export class SlackSocketTrigger implements INodeType {
     description: INodeTypeDescription = {
         displayName: "Slack Socket Trigger",
         name: "slackSocketTrigger",
-        icon: "file:slack.svg",
+        icon: "file:slack-logo.svg",
         group: ["trigger"],
         version: 1,
         description: "Slack Socket Mode 메시지로 워크플로를 시작합니다",

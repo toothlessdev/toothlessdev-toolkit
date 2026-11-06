@@ -6,6 +6,10 @@ import {
     type SlackSourceKind,
 } from "./slackEventFilter";
 import {
+    matchesMessageShortcut,
+    type SlackMessageShortcut,
+} from "./slackMessageShortcut";
+import {
     SlackSocketConnection,
     type SlackEventEnvelope,
     type SlackEventSilence,
@@ -22,6 +26,7 @@ export interface SlackSourceSubscription {
     readonly onConnectionLost: (error: Error) => void;
     readonly onDiagnostic: (message: string) => void;
     readonly onEventSilence: (silence: SlackEventSilence) => void;
+    readonly onMessageShortcut: (shortcut: SlackMessageShortcut) => void;
     /** 소켓은 앱 토큰당 하나라 이 값은 소켓을 처음 여는 구독의 것만 적용됩니다. */
     readonly silenceTimeoutMs?: number;
 }
@@ -53,6 +58,8 @@ class SharedSlackSocket {
             onDiagnostic: (message) =>
                 this.anySubscription()?.onDiagnostic(message),
             onEventSilence: (silence) => this.notifyEventSilence(silence),
+            onMessageShortcut: (shortcut) =>
+                this.deliverMessageShortcut(shortcut),
             silenceTimeoutMs,
         });
         this.ready = this.connection.start();
@@ -111,6 +118,17 @@ class SharedSlackSocket {
         for (const subscription of this.subscriptions) {
             if (subscription.source.kind === "eventSilence") {
                 subscription.onEventSilence(silence);
+            }
+        }
+    }
+
+    private deliverMessageShortcut(shortcut: SlackMessageShortcut): void {
+        for (const subscription of this.subscriptions) {
+            if (
+                subscription.source.kind === "messageShortcut" &&
+                matchesMessageShortcut(shortcut, subscription.source)
+            ) {
+                subscription.onMessageShortcut(shortcut);
             }
         }
     }

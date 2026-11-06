@@ -90,6 +90,120 @@ afterEach(async () => {
     vi.unstubAllEnvs();
 });
 
+describe("Message Shortcut", () => {
+    const shortcutParameters = {
+        source: "messageShortcut",
+        callbackId: "start_session",
+        allowedUserIds: "UOWNER",
+    };
+    const shortcut = {
+        type: "message_action",
+        callback_id: "start_session",
+        trigger_id: "trigger-1",
+        team: { id: "T1" },
+        user: { id: "UOWNER" },
+        channel: { id: "C1", name: "general" },
+        message: {
+            type: "message",
+            user: "UOTHER",
+            text: "비밀 본문",
+            ts: "1.2",
+            thread_ts: "1.0",
+        },
+    };
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
+
+    test("허용한 사용자가 누르면 메시지를 워크플로로 보내고 ack 한다", async () => {
+        await activate(shortcutParameters);
+        const envelopeId = server.sendMessageShortcut(shortcut);
+
+        await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+
+        expect(emittedItems()[0]).toEqual({
+            ...shortcut.message,
+            channel: "C1",
+            triggeredBy: "UOWNER",
+            callbackId: "start_session",
+            teamId: "T1",
+        });
+        await vi.waitFor(() =>
+            expect(server.acknowledgedEnvelopeIds).toContain(envelopeId),
+        );
+    });
+
+    test("봇 메시지는 attachments 내용을 text 에 합쳐 보낸다", async () => {
+        await activate(shortcutParameters);
+        server.sendMessageShortcut({ ...shortcut, message: grafanaAlert });
+
+        await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+
+        expect(emittedItems()[0].text).toContain("[FIRING:1] 결제");
+    });
+
+    test.each([
+        ["허용하지 않은 사용자", { user: { id: "USTRANGER" } }],
+        ["다른 단축키", { callback_id: "other" }],
+        ["메시지 단축키가 아닌 요청", { type: "shortcut" }],
+    ])("%s 는 무시하고 ack 만 한다", async (_, override) => {
+        await activate(shortcutParameters);
+        const envelopeId = server.sendMessageShortcut({
+            ...shortcut,
+            ...override,
+        });
+
+        await vi.waitFor(() =>
+            expect(server.acknowledgedEnvelopeIds).toContain(envelopeId),
+        );
+        await settle();
+
+        expect(emit).not.toHaveBeenCalled();
+    });
+
+    test("허용 목록이 비면 아무도 실행할 수 없다", async () => {
+        await activate({ ...shortcutParameters, allowedUserIds: "" });
+        server.sendMessageShortcut(shortcut);
+        await settle();
+
+        expect(emit).not.toHaveBeenCalled();
+    });
+
+    test("재전송된 같은 요청은 한 번만 보낸다", async () => {
+        await activate(shortcutParameters);
+        server.sendMessageShortcut(shortcut);
+        server.sendMessageShortcut(shortcut);
+        await settle();
+
+        expect(emit).toHaveBeenCalledOnce();
+    });
+
+    test("메시지 이벤트는 단축키 소스로 보내지 않는다", async () => {
+        await activate(shortcutParameters);
+        const envelopeId = server.sendEvent("EvMention", mention);
+
+        await vi.waitFor(() =>
+            expect(server.acknowledgedEnvelopeIds).toContain(envelopeId),
+        );
+        await settle();
+
+        expect(emit).not.toHaveBeenCalled();
+    });
+
+    test("본문은 로그에 남기지 않는다", async () => {
+        const logInfo = vi.fn();
+        const functions = createTriggerFunctions(shortcutParameters, emit);
+        (functions.logger as unknown as { info: typeof logInfo }).info =
+            logInfo;
+        responses.push(await new SlackSocketTrigger().trigger.call(functions));
+        server.sendMessageShortcut(shortcut);
+
+        await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+
+        const logged = logInfo.mock.calls.flat().join();
+        expect(logged).toContain("callback_id=start_session");
+        expect(logged).not.toContain("비밀 본문");
+    });
+});
+
 describe("SlackSocketTrigger", () => {
     test("Event Silence 는 이벤트가 끊기면 워크플로를 실행하고 메시지로는 실행하지 않는다", async () => {
         vi.stubEnv("N8N_SLACK_SOCKET_SILENCE_TIMEOUT_MS", "200");

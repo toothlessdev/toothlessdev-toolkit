@@ -2,6 +2,7 @@ import { LogLevel, SocketModeClient } from "@slack/socket-mode";
 
 import { SlackEventSilenceMonitor } from "./SlackEventSilenceMonitor";
 import type { SlackEvent, SlackSourceKind } from "./slackEventFilter";
+import type { SlackMessageShortcut } from "./slackMessageShortcut";
 
 export interface SlackEventEnvelope {
     readonly event_id: string;
@@ -27,6 +28,7 @@ export interface SlackSocketConnectionOptions {
     readonly onConnectionLost: (error: Error) => void;
     readonly onDiagnostic: (message: string) => void;
     readonly onEventSilence: (silence: SlackEventSilence) => void;
+    readonly onMessageShortcut: (shortcut: SlackMessageShortcut) => void;
     readonly reconnectTimeoutMs?: number;
     readonly silenceTimeoutMs?: number;
     readonly silenceRepeatIntervalMs?: number;
@@ -69,7 +71,10 @@ export class SlackSocketConnection {
                 this.acknowledge(ack);
                 this.silenceMonitor.recordEvent();
 
-                if (type === "events_api") this.deliver(body);
+                if (type === "events_api")
+                    this.deliver(body as SlackEventEnvelope);
+                if (type === "interactive")
+                    this.deliverShortcut(body as SlackMessageShortcut);
             },
         );
         this.client.on("ws_message", (rawMessage: string | ArrayBuffer) =>
@@ -158,6 +163,16 @@ export class SlackSocketConnection {
         if (isNew) this.options.onEvent(envelope, kind);
     }
 
+    /** 메시지 본문은 로그에 남기지 않습니다. 재전송으로 세션이 두 개 뜨지 않게 trigger_id 로 거릅니다. */
+    private deliverShortcut(shortcut: SlackMessageShortcut): void {
+        const isNew = this.rememberIfNew(shortcut.trigger_id);
+        this.options.onDiagnostic(
+            `Slack 단축키 수신 outcome=${isNew ? "passed" : "duplicate"} type=${shortcut.type} callback_id=${shortcut.callback_id} user=${shortcut.user?.id} channel=${shortcut.channel?.id}`,
+        );
+
+        if (isNew) this.options.onMessageShortcut(shortcut);
+    }
+
     /** 재연결 전후로 같은 이벤트가 다시 오면 claude 가 두 번 실행되어 비용이 두 배가 됩니다. */
     private rememberIfNew(eventId: string): boolean {
         if (this.rememberedEventIds.has(eventId)) return false;
@@ -181,5 +196,5 @@ interface SlackHelloMessage {
 interface SlackEventDelivery {
     readonly ack: () => Promise<void>;
     readonly type: string;
-    readonly body: SlackEventEnvelope;
+    readonly body: SlackEventEnvelope | SlackMessageShortcut;
 }

@@ -20,11 +20,22 @@ Slack Socket Mode 이벤트로 워크플로를 시작하는 n8n 트리거 노드
 | Mentions         | 지정한 사용자나 그룹을 멘션한 사람 메시지 | Mentioned User ID 또는 Mentioned User Group IDs |
 | Channel Messages | 지정한 채널의 사람 메시지 전체            | Channel IDs                                     |
 | Bot Messages     | 지정한 채널에서 허용한 봇의 메시지        | Allowed Bot IDs, Channel IDs                    |
+| Message Shortcut | 허용한 사용자가 단축키를 누른 메시지      | Callback ID, Allowed User IDs                   |
 | Event Silence    | 메시지가 아니라 이벤트가 끊긴 상태        | 없음                                            |
 
 - **우선순위:** 한 메시지가 여러 소스에 맞으면 Bot Messages, Mentions, Channel Messages 순으로 한 소스에만 갑니다.
 - **봇 메시지:** `attachments` 내용을 `text` 에 합쳐 전달합니다.
 - **답글 루프:** 워크플로가 답글에 쓰는 봇이나 채널을 소스에 넣으면 답글이 워크플로를 다시 실행합니다.
+
+## Message Shortcut
+
+메시지의 `⋯` 메뉴에 앱의 항목을 추가해, 누른 메시지로 워크플로를 시작합니다. Slack 의 저장(나중에 보기)은 앱에 이벤트가 오지 않아 트리거로 쓸 수 없습니다.
+
+1. Slack 앱의 Interactivity & Shortcuts 에서 Interactivity 를 켭니다.
+2. Create New Shortcut 에서 On messages 를 고르고 이름과 Callback ID 를 정합니다.
+3. 트리거 노드의 Source 를 Message Shortcut 으로 두고 Callback ID 와 Allowed User IDs 를 넣습니다.
+
+출력은 메시지 필드에 `channel`, `triggeredBy`, `callbackId`, `teamId` 를 더한 값입니다. Allowed User IDs 가 비면 아무도 실행할 수 없습니다. 메시지 본문은 다른 사람이 쓴 글이므로 프롬프트에서 지시가 아닌 데이터로 다룹니다.
 
 ## Event Silence
 

@@ -55,6 +55,12 @@ function readSource(trigger: ITriggerFunctions): SlackSource {
             };
         case "eventSilence":
             return { kind };
+        case "messageShortcut":
+            return {
+                kind,
+                callbackId: readText("callbackId").trim(),
+                allowedUserIds: readIds("allowedUserIds"),
+            };
     }
 }
 
@@ -97,6 +103,12 @@ export class SlackSocketTrigger implements INodeType {
                         description: "지정한 채널에서 허용한 봇의 메시지",
                     },
                     {
+                        name: "Message Shortcut",
+                        value: "messageShortcut",
+                        description:
+                            "허용한 사용자가 메시지 메뉴에서 단축키를 누른 메시지",
+                    },
+                    {
                         name: "Event Silence",
                         value: "eventSilence",
                         description:
@@ -134,6 +146,27 @@ export class SlackSocketTrigger implements INodeType {
                 displayOptions: {
                     show: { source: ["channelMessages", "botMessages"] },
                 },
+            },
+            {
+                displayName: "Callback ID",
+                name: "callbackId",
+                type: "string",
+                default: "",
+                required: true,
+                placeholder: "start_session",
+                description: "Slack 앱에서 단축키를 만들 때 정한 Callback ID",
+                displayOptions: { show: { source: ["messageShortcut"] } },
+            },
+            {
+                displayName: "Allowed User IDs",
+                name: "allowedUserIds",
+                type: "string",
+                default: "",
+                required: true,
+                placeholder: "U0123456789,U9876543210",
+                description:
+                    "쉼표로 구분한 사용자. 단축키를 눌러도 되는 사람입니다. 비우면 아무도 실행할 수 없습니다.",
+                displayOptions: { show: { source: ["messageShortcut"] } },
             },
             {
                 displayName: "Allowed Sender IDs",
@@ -185,6 +218,19 @@ export class SlackSocketTrigger implements INodeType {
             onError: (error) => this.logger.error(error.message),
             onConnectionLost: (error) => this.emitError(error),
             onDiagnostic: (message) => this.logger.info(message),
+            onMessageShortcut: (shortcut) => {
+                this.emit([
+                    this.helpers.returnJsonArray([
+                        {
+                            ...withBotAttachmentText(shortcut.message),
+                            channel: shortcut.channel.id,
+                            triggeredBy: shortcut.user.id,
+                            callbackId: shortcut.callback_id,
+                            teamId: shortcut.team?.id,
+                        },
+                    ]),
+                ]);
+            },
             onEventSilence: ({ silentMs, appId }) => {
                 this.emit([
                     this.helpers.returnJsonArray([

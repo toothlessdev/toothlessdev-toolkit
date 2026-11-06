@@ -69,6 +69,10 @@ export class FakeSlackServer {
         });
     }
 
+    sendMessageShortcut(payload: Record<string, unknown>): string {
+        return this.sendEnvelope({ type: "interactive", payload });
+    }
+
     /** Slack 이 연결을 교체할 때 보내는 메시지입니다. 클라이언트는 다시 연결해야 합니다. */
     requestReconnect(): void {
         this.socket?.send(

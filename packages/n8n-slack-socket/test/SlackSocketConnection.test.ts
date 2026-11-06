@@ -30,6 +30,7 @@ beforeEach(async () => {
         onConnectionLost,
         onDiagnostic,
         onEventSilence: () => {},
+        onMessageShortcut: () => {},
         reconnectTimeoutMs: 100,
     });
     await connection.start();
@@ -58,6 +59,7 @@ describe("이벤트 끊김 감지", () => {
             onConnectionLost: () => {},
             onDiagnostic: () => {},
             onEventSilence,
+            onMessageShortcut: () => {},
             silenceTimeoutMs: SILENCE_TIMEOUT_MS,
             silenceRepeatIntervalMs,
         });

@@ -34,7 +34,14 @@ export interface EventSilenceSource {
     readonly kind: "eventSilence";
 }
 
+export interface MessageShortcutSource {
+    readonly kind: "messageShortcut";
+    readonly callbackId: string;
+    readonly allowedUserIds: ReadonlySet<string>;
+}
+
 export type SlackSource =
+    | MessageShortcutSource
     | MentionsSource
     | ChannelMessagesSource
     | BotMessagesSource
@@ -148,6 +155,7 @@ export function matchesSlackSource(
         case "botMessages":
             return matchesBotMessages(event, source);
         case "eventSilence":
+        case "messageShortcut":
             return false;
     }
 }

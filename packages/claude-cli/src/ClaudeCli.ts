@@ -172,6 +172,23 @@ export class ClaudeCli {
         };
     }
 
+    /** 프로세스만 멈춥니다. 대화는 남아 있어서 --resume 으로 이어 갈 수 있습니다. */
+    async stopBackground(
+        backgroundId: string,
+        workingDirectory: string,
+        cancelSignal?: AbortSignal,
+    ): Promise<void> {
+        const output = await this.execute(
+            {
+                commandLineArguments: ["stop", backgroundId],
+                standardInput: "",
+            },
+            workingDirectory,
+            cancelSignal,
+        );
+        this.assertSucceeded(output);
+    }
+
     /** --bg 출력의 ID 는 8자리라서 --resume 에 넘길 UUID 를 목록에서 찾습니다. */
     private async findSessionId(
         backgroundId: string,

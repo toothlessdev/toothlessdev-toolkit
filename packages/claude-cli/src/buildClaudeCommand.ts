@@ -119,19 +119,38 @@ function buildOptionalArguments(request: ClaudeRequest): string[] {
     );
 }
 
+function assertValidSessionId(sessionId: string): void {
+    if (!SESSION_ID_PATTERN.test(sessionId)) {
+        throw new InvalidClaudeRequestError(
+            `Session ID 는 UUID 형식이어야 합니다: ${sessionId}`,
+        );
+    }
+}
+
+/**
+ * 멈춘 백그라운드 세션을 같은 ID 로 깨웁니다. 옵션을 하나라도 넘기면 claude 가 복사본을 만들므로
+ * 권한과 도구는 세션을 처음 띄울 때 저장된 값을 그대로 씁니다.
+ */
+export function buildWakeCommand(
+    sessionId: string,
+    prompt: string,
+): ClaudeCommand {
+    assertValidSessionId(sessionId);
+
+    return {
+        commandLineArguments: ["--bg", "--resume", sessionId],
+        standardInput: prompt,
+    };
+}
+
 /**
  * 프롬프트는 stdin 으로 넘깁니다. 인자로 넘기면 `-` 로 시작하는 메시지가 옵션으로 해석될 수 있습니다.
  * additionalArguments 는 맨 뒤에 둡니다. claude CLI 는 같은 옵션이 반복되면 뒤의 값을 쓰므로
  * 격리 옵션의 기본값도 여기서 덮어쓸 수 있습니다.
  */
 export function buildClaudeCommand(request: ClaudeRequest): ClaudeCommand {
-    if (
-        request.resumeSessionId !== undefined &&
-        !SESSION_ID_PATTERN.test(request.resumeSessionId)
-    ) {
-        throw new InvalidClaudeRequestError(
-            `Session ID 는 UUID 형식이어야 합니다: ${request.resumeSessionId}`,
-        );
+    if (request.resumeSessionId !== undefined) {
+        assertValidSessionId(request.resumeSessionId);
     }
     if (request.jsonSchema) assertValidJsonSchema(request.jsonSchema);
 

@@ -1,4 +1,5 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -164,6 +165,33 @@ describe("ClaudeCli", () => {
                 temporaryDirectory,
             );
             expect(result.structuredOutput).toBeUndefined();
+        });
+    });
+
+    describe("stopBackground", () => {
+        test("stop 명령에 짧은 ID 를 넘긴다", async () => {
+            const argumentsPath = path.join(temporaryDirectory, "arguments");
+            const executable = writeFakeClaude(
+                `echo "$@" > '${argumentsPath}'`,
+            );
+
+            await new ClaudeCli(executable, 5000).stopBackground(
+                "61ec17e6",
+                temporaryDirectory,
+            );
+
+            expect(readFileSync(argumentsPath, "utf8").trim()).toBe(
+                "stop 61ec17e6",
+            );
+        });
+
+        test("없는 세션이면 ClaudeFailedError 로 던진다", async () => {
+            const running = new ClaudeCli(
+                writeFakeClaude(`echo 'No job matching' >&2; exit 1`),
+                5000,
+            ).stopBackground("61ec17e6", temporaryDirectory);
+
+            await expect(running).rejects.toBeInstanceOf(ClaudeFailedError);
         });
     });
 

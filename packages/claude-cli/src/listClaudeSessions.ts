@@ -18,10 +18,13 @@ export interface ClaudeSession {
     readonly startedAtMs: number;
     /** 프로세스가 살아 있을 때만 있습니다. 메시지를 받을 수 있는지 판단하는 기준입니다. */
     readonly pid?: number;
+    /** claude 가 보고하는 진행 상태입니다. 예: working, blocked, done */
+    readonly state?: string;
 }
 
 interface ClaudeAgentEntry {
     readonly pid?: number;
+    readonly state?: string;
     readonly id?: string;
     readonly sessionId?: string;
     readonly name?: string;
@@ -72,6 +75,7 @@ export async function listClaudeSessions({
             isBackground: entry.kind === "background",
             startedAtMs: entry.startedAt ?? 0,
             pid: entry.pid,
+            state: entry.state,
         })),
     );
 }

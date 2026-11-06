@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
     buildClaudeCommand,
+    buildWakeCommand,
     type ClaudeRequest,
 } from "../src/buildClaudeCommand";
 import { InvalidClaudeRequestError } from "../src/ClaudeError";
@@ -222,5 +223,22 @@ describe("buildClaudeCommand", () => {
                 resumeSessionId: "--dangerously-skip-permissions",
             }),
         ).toThrow(InvalidClaudeRequestError);
+    });
+});
+
+describe("buildWakeCommand", () => {
+    const sessionId = "61ec17e6-ab70-4dfe-ab0c-9dcecd7796fb";
+
+    test("저장된 옵션을 쓰도록 --bg 와 --resume 만 넘기고 프롬프트는 stdin 으로 보낸다", () => {
+        expect(buildWakeCommand(sessionId, "--위험한 메시지")).toEqual({
+            commandLineArguments: ["--bg", "--resume", sessionId],
+            standardInput: "--위험한 메시지",
+        });
+    });
+
+    test("UUID 가 아니면 던진다", () => {
+        expect(() => buildWakeCommand("--dangerous", "메시지")).toThrow(
+            InvalidClaudeRequestError,
+        );
     });
 });

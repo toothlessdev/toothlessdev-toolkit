@@ -30,9 +30,11 @@ const { result, sessionId } = await new ClaudeCli("claude", 300_000).run(
 | 이름                               | 설명                                                       |
 | ---------------------------------- | ---------------------------------------------------------- |
 | `buildClaudeCommand(request)`      | 요청을 CLI 인자와 stdin 으로 바꿉니다                      |
+| `buildWakeCommand(id, prompt)`     | 멈춘 백그라운드 세션을 같은 ID 로 깨우는 명령을 만듭니다   |
 | `ClaudeCli.run`                    | `-p` 로 실행하고 결과를 돌려줍니다                         |
 | `ClaudeCli.runCollectingToolCalls` | 실제 호출된 도구와 결과를 돌려줍니다. `stream-json` 필요   |
 | `ClaudeCli.startBackground`        | `--bg` 로 세션을 띄우고 바로 돌아옵니다                    |
+| `ClaudeCli.stopBackground`         | 백그라운드 세션의 프로세스만 멈춥니다                      |
 | `listClaudeSessions(options)`      | 세션 목록을 읽습니다. 살아 있는 세션에만 `pid` 가 있습니다 |
 
 ## 동작

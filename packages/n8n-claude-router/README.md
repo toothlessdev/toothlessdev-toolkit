@@ -11,12 +11,14 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 
 ## 오퍼레이션
 
-| 오퍼레이션 | 동작                                            | 쓰는 시점                 |
-| ---------- | ----------------------------------------------- | ------------------------- |
-| Route      | 메시지를 넣을 세션을 고릅니다                   | 메시지를 받은 직후        |
-| Deliver    | 고른 세션에 메시지를 넣습니다                   | Route 가 세션을 찾았을 때 |
-| Wake       | 멈춘 세션을 같은 ID 로 깨우고 메시지를 넣습니다 | Route 가 `resume` 일 때   |
-| Remember   | 대화와 새로 띄운 세션을 연결합니다              | 새 세션을 띄운 직후       |
+| 오퍼레이션         | 동작                                             | 쓰는 시점                    |
+| ------------------ | ------------------------------------------------ | ---------------------------- |
+| Route              | 메시지를 넣을 세션을 고릅니다                    | 메시지를 받은 직후           |
+| Deliver            | 고른 세션에 메시지를 넣습니다                    | Route 가 세션을 찾았을 때    |
+| Wake               | 멈춘 세션을 같은 ID 로 깨우고 메시지를 넣습니다  | Route 가 `resume` 일 때      |
+| Remember           | 대화와 새로 띄운 세션을 연결합니다               | 새 세션을 띄운 직후          |
+| Track Notification | 세션 상태에 맞춰 고칠 Slack 알림을 기록합니다    | 알림을 보낸 직후             |
+| Sync Notifications | 상태가 바뀐 알림을 돌려주고 끝난 세션을 멈춥니다 | 스케줄 트리거에서 주기적으로 |
 
 결과는 입력 항목의 `routing` 필드에 담깁니다.
 
@@ -34,6 +36,24 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 | `resume`  | 끝난 세션을 골랐음      | Wake                                             |
 | `new`     | 이어 갈 세션이 없음     | n8n-claude-cli Background 모드, 그 뒤에 Remember |
 
+## 세션 상태를 알림에 표시하기
+
+Slack 알림의 맨 앞 이모지를 세션 상태에 맞춰 고치고, 끝난 세션의 프로세스를 멈춥니다. 프로세스가 살아 있는 동안은 Claude Desktop 에서 세션을 열 수 없어서 멈춥니다.
+
+1. 알림 본문을 `:hourglass_flowing_sand:` 로 시작해서 보내고 바로 뒤에 Track Notification 을 둡니다.
+2. 스케줄 트리거 뒤에 Sync Notifications 를 둡니다. Slack 노드의 메시지 수정으로 `routing.channel`, `routing.ts`, `routing.text` 를 보내고, Include Link to Workflow 를 끕니다.
+3. 수정이 성공하면 Track Notification 에 `routing` 값을 넣어 표시한 상태를 저장합니다. 수정이 실패하면 다음 동기화가 다시 시도합니다.
+
+| 세션 상태               | 이모지                     | 프로세스                  |
+| ----------------------- | -------------------------- | ------------------------- |
+| 작업 중                 | `:hourglass_flowing_sand:` | 둡니다                    |
+| 답을 기다림 (`blocked`) | `:raised_hand:`            | 둡니다                    |
+| 끝남 (`done`)           | `:white_check_mark:`       | Stop Grace 가 지나면 멈춤 |
+
+- Track Notification 으로 기록한 세션만 멈춥니다. 직접 띄운 세션은 건드리지 않습니다.
+- `done` 은 모델이 차례를 마치고 입력을 기다린다는 뜻입니다. 터미널에서 붙어 보는 중인 세션도 Stop Grace 가 지나면 멈춥니다.
+- 멈춘 세션은 Deliver 로 보낼 수 없으므로, 후속 메시지를 받는 워크플로에는 Include Ended Sessions 를 켜고 `resume` 경로에 Wake 를 둡니다.
+
 ## 주요 설정
 
 | 설정                     | 기본값  | 설명                                                     |
@@ -43,6 +63,8 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 | Max Candidates           | `20`    | 후보 세션 수                                             |
 | Candidate Max Age (Days) | `7`     | 이보다 오래된 세션은 후보에서 뺍니다                     |
 | Include Ended Sessions   | 끔      | 끝난 백그라운드 세션도 후보로 비교합니다                 |
+| Stop Grace (Seconds)     | `10`    | `done` 이 된 뒤 프로세스를 멈출 때까지 기다리는 시간     |
+| Notification Store Path  |         | 비우면 `~/.n8n/claude-router/session-notifications.json` |
 | Max Budget (USD)         | `0.2`   |                                                          |
 | Timeout (Seconds)        | `60`    |                                                          |
 | Store Path               |         | 비우면 `~/.n8n/claude-router/conversation-sessions.json` |

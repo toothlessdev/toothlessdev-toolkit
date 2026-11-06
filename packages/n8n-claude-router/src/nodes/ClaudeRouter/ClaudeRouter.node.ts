@@ -26,7 +26,12 @@ import { resolveWakeTarget } from "../../claude/resolveWakeTarget";
 import { ConversationBindingRule } from "../../routing/ConversationBindingRule";
 import { SessionMatchRule } from "../../routing/SessionMatchRule";
 import { SessionRouter } from "../../routing/SessionRouter";
+import { syncSessionNotifications } from "../../notification/syncSessionNotifications";
 import { ConversationSessionStore } from "../../store/ConversationSessionStore";
+import {
+    SessionNotificationStore,
+    type NotificationStatus,
+} from "../../store/SessionNotificationStore";
 
 interface ClaudeRouterOptions {
     executable?: string;
@@ -38,6 +43,8 @@ interface ClaudeRouterOptions {
     maxBudgetUsd?: number;
     timeoutSeconds?: number;
     storePath?: string;
+    notificationStorePath?: string;
+    stopGraceSeconds?: number;
 }
 
 const DEFAULT_EXECUTABLE = "claude";
@@ -46,14 +53,29 @@ const DEFAULT_MAX_CANDIDATES = 20;
 const DEFAULT_CANDIDATE_MAX_AGE_DAYS = 7;
 const DEFAULT_MAX_BUDGET_USD = 0.2;
 const DEFAULT_TIMEOUT_SECONDS = 60;
+const DEFAULT_STOP_GRACE_SECONDS = 10;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_SECOND = 1000;
 
-function defaultStorePath(): string {
+function routerDataPath(fileName: string): string {
     return path.join(
         process.env.N8N_USER_FOLDER ?? homedir(),
         ".n8n",
         "claude-router",
-        "conversation-sessions.json",
+        fileName,
+    );
+}
+
+function defaultStorePath(): string {
+    return routerDataPath("conversation-sessions.json");
+}
+
+function createNotificationStore(
+    options: ClaudeRouterOptions,
+): SessionNotificationStore {
+    return new SessionNotificationStore(
+        options.notificationStorePath ||
+            routerDataPath("session-notifications.json"),
     );
 }
 
@@ -238,13 +260,68 @@ function rememberItem(
     return { conversationKey, sessionId };
 }
 
+function trackNotificationItem(
+    context: IExecuteFunctions,
+    itemIndex: number,
+    options: ClaudeRouterOptions,
+): IDataObject {
+    const notification = {
+        sessionId: context.getNodeParameter("sessionId", itemIndex) as string,
+        channel: context.getNodeParameter("channel", itemIndex) as string,
+        ts: context.getNodeParameter("ts", itemIndex) as string,
+        text: context.getNodeParameter("text", itemIndex) as string,
+        status: context.getNodeParameter(
+            "status",
+            itemIndex,
+        ) as NotificationStatus,
+    };
+    createNotificationStore(options).upsert(notification);
+
+    return { ...notification };
+}
+
+async function syncNotificationsItem(
+    context: IExecuteFunctions,
+    itemIndex: number,
+    options: ClaudeRouterOptions,
+): Promise<IDataObject[]> {
+    const workingDirectory = context.getNodeParameter(
+        "workingDirectory",
+        itemIndex,
+    ) as string;
+    const cancelSignal = context.getExecutionCancelSignal();
+    const cli = createCli(options);
+
+    const changes = await syncSessionNotifications({
+        store: createNotificationStore(options),
+        listSessions: () =>
+            listSessions(options, workingDirectory, cancelSignal),
+        stopSession: (session) =>
+            cli.stopBackground(
+                session.backgroundId,
+                workingDirectory,
+                cancelSignal,
+            ),
+        stopGraceMs:
+            (options.stopGraceSeconds ?? DEFAULT_STOP_GRACE_SECONDS) *
+            MS_PER_SECOND,
+        nowMs: Date.now,
+        onStopFailed: (session, error) =>
+            context.logger.warn(
+                `Claude Router: stop 실패 session=${session.sessionId}: ${error.message}`,
+            ),
+    });
+
+    return changes.map((change) => ({ ...change }));
+}
+
 async function runOperation(
     context: IExecuteFunctions,
     operation: string,
     itemIndex: number,
     store: ConversationSessionStore,
     options: ClaudeRouterOptions,
-): Promise<IDataObject> {
+): Promise<IDataObject | IDataObject[]> {
     if (operation === "route") {
         return routeItem(context, itemIndex, store, options);
     }
@@ -253,6 +330,12 @@ async function runOperation(
     }
     if (operation === "wake") {
         return wakeItem(context, itemIndex, options);
+    }
+    if (operation === "trackNotification") {
+        return trackNotificationItem(context, itemIndex, options);
+    }
+    if (operation === "syncNotifications") {
+        return syncNotificationsItem(context, itemIndex, options);
     }
 
     return rememberItem(context, itemIndex, store);
@@ -300,6 +383,18 @@ export class ClaudeRouter implements INodeType {
                         name: "Remember",
                         value: "remember",
                         description: "대화와 새로 띄운 세션을 연결합니다",
+                    },
+                    {
+                        name: "Track Notification",
+                        value: "trackNotification",
+                        description:
+                            "세션 상태에 맞춰 고칠 Slack 알림을 기록합니다",
+                    },
+                    {
+                        name: "Sync Notifications",
+                        value: "syncNotifications",
+                        description:
+                            "상태가 바뀐 알림을 돌려주고, 끝난 지 오래된 세션을 멈춥니다",
                     },
                 ],
             },
@@ -360,9 +455,64 @@ export class ClaudeRouter implements INodeType {
                     "이 폴더에서 시작한 세션만 후보이자 수신자가 됩니다. Claude CLI 노드와 같은 절대 경로를 넣습니다.",
                 displayOptions: {
                     show: {
-                        operation: ["route", "deliver", "wake"],
+                        operation: [
+                            "route",
+                            "deliver",
+                            "wake",
+                            "syncNotifications",
+                        ],
                     },
                 },
+            },
+            {
+                displayName: "Session ID",
+                name: "sessionId",
+                type: "string",
+                required: true,
+                default: "={{ $json.routing.sessionId }}",
+                description: "알림이 가리키는 세션의 UUID",
+                displayOptions: { show: { operation: ["trackNotification"] } },
+            },
+            {
+                displayName: "Channel",
+                name: "channel",
+                type: "string",
+                required: true,
+                default: "={{ $json.channel }}",
+                description: "알림을 보낸 채널 ID",
+                displayOptions: { show: { operation: ["trackNotification"] } },
+            },
+            {
+                displayName: "Message Timestamp",
+                name: "ts",
+                type: "string",
+                required: true,
+                default: "={{ $json.message_timestamp }}",
+                description: "Slack 노드가 돌려준 메시지 타임스탬프",
+                displayOptions: { show: { operation: ["trackNotification"] } },
+            },
+            {
+                displayName: "Text",
+                name: "text",
+                type: "string",
+                required: true,
+                default: "={{ $json.message.text }}",
+                description:
+                    "알림 메시지 본문. 상태 이모지를 앞에 바꿔 넣습니다.",
+                displayOptions: { show: { operation: ["trackNotification"] } },
+            },
+            {
+                displayName: "Status",
+                name: "status",
+                type: "options",
+                default: "working",
+                options: [
+                    { name: "Working", value: "working" },
+                    { name: "Blocked", value: "blocked" },
+                    { name: "Done", value: "done" },
+                ],
+                description: "지금 메시지에 표시된 상태",
+                displayOptions: { show: { operation: ["trackNotification"] } },
             },
             {
                 displayName: "Session ID",
@@ -454,6 +604,23 @@ export class ClaudeRouter implements INodeType {
                         description:
                             "대화와 세션의 연결을 저장할 파일. 비우면 ~/.n8n/claude-router/conversation-sessions.json 입니다.",
                     },
+                    {
+                        displayName: "Notification Store Path",
+                        name: "notificationStorePath",
+                        type: "string",
+                        default: "",
+                        description:
+                            "추적할 알림을 저장할 파일. 비우면 ~/.n8n/claude-router/session-notifications.json 입니다.",
+                    },
+                    {
+                        displayName: "Stop Grace (Seconds)",
+                        name: "stopGraceSeconds",
+                        type: "number",
+                        typeOptions: { minValue: 0 },
+                        default: DEFAULT_STOP_GRACE_SECONDS,
+                        description:
+                            "세션이 done 이 된 뒤 프로세스를 멈출 때까지 기다리는 시간",
+                    },
                 ],
             },
         ],
@@ -486,10 +653,12 @@ export class ClaudeRouter implements INodeType {
                     options,
                 );
 
-                outputItems.push({
-                    json: { ...items[itemIndex].json, routing },
-                    pairedItem: { item: itemIndex },
-                });
+                for (const result of [routing].flat()) {
+                    outputItems.push({
+                        json: { ...items[itemIndex].json, routing: result },
+                        pairedItem: { item: itemIndex },
+                    });
+                }
             } catch (error) {
                 if (!this.continueOnFail()) {
                     throw new NodeOperationError(

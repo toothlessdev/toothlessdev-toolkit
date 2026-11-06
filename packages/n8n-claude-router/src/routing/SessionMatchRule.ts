@@ -2,6 +2,7 @@ import type { ClaudeSession } from "claude-cli";
 
 import {
     canReceiveMessage,
+    canResume,
     type RoutingContext,
     type RoutingDecision,
     type RoutingMessage,
@@ -27,19 +28,27 @@ export interface CandidateCriteria {
     readonly maxCandidates: number;
     readonly maxAgeMs: number;
     readonly nowMs: () => number;
+    readonly shouldIncludeEndedSessions?: boolean;
 }
 
 /** 후보를 좁힐수록 LLM 이 잘못 고를 대상과 비용이 함께 줄어듭니다. */
 export function selectCandidates(
     sessions: readonly ClaudeSession[],
-    { workingDirectory, maxCandidates, maxAgeMs, nowMs }: CandidateCriteria,
+    {
+        workingDirectory,
+        maxCandidates,
+        maxAgeMs,
+        nowMs,
+        shouldIncludeEndedSessions = false,
+    }: CandidateCriteria,
 ): ClaudeSession[] {
     const oldestStartedAtMs = nowMs() - maxAgeMs;
 
     return sessions
         .filter(
             (session) =>
-                canReceiveMessage(session) &&
+                (canReceiveMessage(session) ||
+                    (shouldIncludeEndedSessions && canResume(session))) &&
                 session.workingDirectory === workingDirectory &&
                 session.startedAtMs >= oldestStartedAtMs,
         )
@@ -74,14 +83,14 @@ export class SessionMatchRule implements RoutingRule {
          * LLM 답은 메시지 내용의 영향을 받으므로 믿지 않습니다.
          * 후보에 없는 ID 를 그대로 넘기면 작성자가 임의의 세션에 메시지를 넣을 수 있습니다.
          */
-        const isCandidate = candidates.some(
+        const matchedSession = candidates.find(
             (candidate) => candidate.sessionId === match.sessionId,
         );
-        if (!isCandidate) return null;
+        if (!matchedSession) return null;
 
         return {
-            action: "deliver",
-            sessionId: match.sessionId,
+            action: canReceiveMessage(matchedSession) ? "deliver" : "resume",
+            sessionId: matchedSession.sessionId,
             reason: match.reason,
         };
     }

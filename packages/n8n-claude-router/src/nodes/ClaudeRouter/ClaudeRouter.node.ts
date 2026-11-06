@@ -28,6 +28,7 @@ interface ClaudeRouterOptions {
     routingInstructions?: string;
     maxCandidates?: number;
     candidateMaxAgeDays?: number;
+    shouldIncludeEndedSessions?: boolean;
     maxBudgetUsd?: number;
     timeoutSeconds?: number;
     storePath?: string;
@@ -93,6 +94,7 @@ function createRouter(
                     (options.candidateMaxAgeDays ??
                         DEFAULT_CANDIDATE_MAX_AGE_DAYS) * MS_PER_DAY,
                 nowMs: Date.now,
+                shouldIncludeEndedSessions: options.shouldIncludeEndedSessions,
             }),
         ],
         (cancelSignal) => listSessions(options, workingDirectory, cancelSignal),
@@ -131,7 +133,7 @@ async function routeItem(
 
     return {
         action: decision.action,
-        sessionId: decision.action === "deliver" ? decision.sessionId : "",
+        sessionId: decision.action === "new" ? "" : decision.sessionId,
         ruleName: decision.ruleName,
         reason: decision.reason,
         conversationKey,
@@ -361,6 +363,14 @@ export class ClaudeRouter implements INodeType {
                         type: "number",
                         typeOptions: { minValue: 1 },
                         default: DEFAULT_CANDIDATE_MAX_AGE_DAYS,
+                    },
+                    {
+                        displayName: "Include Ended Sessions",
+                        name: "shouldIncludeEndedSessions",
+                        type: "boolean",
+                        default: false,
+                        description:
+                            "Whether to compare ended background sessions too. Route 가 이런 세션을 고르면 action 이 resume 이고, Claude CLI 노드의 Resume Session ID 로 이어 갑니다.",
                     },
                     {
                         displayName: "Max Budget (USD)",

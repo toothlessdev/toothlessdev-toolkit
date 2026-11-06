@@ -18,6 +18,11 @@ export type RoutingDecision =
           readonly reason: string;
       }
     | {
+          readonly action: "resume";
+          readonly sessionId: string;
+          readonly reason: string;
+      }
+    | {
           readonly action: "new";
           readonly reason: string;
       };
@@ -38,4 +43,9 @@ export interface RoutingRule {
 /** 프로세스가 살아 있는 백그라운드 세션만 메시지를 받을 수 있습니다. */
 export function canReceiveMessage(session: ClaudeSession): boolean {
     return session.isBackground && session.pid !== undefined;
+}
+
+/** 프로세스가 끝난 백그라운드 세션은 메시지를 받지 못하지만 --resume 으로 다시 띄울 수 있습니다. */
+export function canResume(session: ClaudeSession): boolean {
+    return session.isBackground && session.pid === undefined;
 }

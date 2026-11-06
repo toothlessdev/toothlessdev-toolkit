@@ -189,6 +189,53 @@ describe("SessionRouter", () => {
         expect(decision.action).toBe("new");
     });
 
+    test("끝난 세션을 후보에 넣으면 LLM 이 고른 끝난 세션은 resume, 산 세션은 deliver 다", async () => {
+        const router = new SessionRouter(
+            [
+                new SessionMatchRule(
+                    { match },
+                    { ...criteria, shouldIncludeEndedSessions: true },
+                ),
+            ],
+            async () => [session("live"), session("ended", { pid: undefined })],
+        );
+
+        match.mockResolvedValue({
+            sessionId: "ended",
+            confidence: "high",
+            reason: "같은 알림",
+        });
+        await expect(router.route(message)).resolves.toMatchObject({
+            action: "resume",
+            sessionId: "ended",
+        });
+
+        match.mockResolvedValue({
+            sessionId: "live",
+            confidence: "high",
+            reason: "같은 알림",
+        });
+        await expect(router.route(message)).resolves.toMatchObject({
+            action: "deliver",
+            sessionId: "live",
+        });
+    });
+
+    test("옵션을 켜지 않으면 끝난 세션을 답해도 새 세션이다", async () => {
+        match.mockResolvedValue({
+            sessionId: "ended",
+            confidence: "high",
+            reason: "같은 알림",
+        });
+
+        const decision = await createRouter([
+            session("live"),
+            session("ended", { pid: undefined }),
+        ]).route(message);
+
+        expect(decision.action).toBe("new");
+    });
+
     test("LLM 호출 실패는 숨기지 않고 던진다", async () => {
         match.mockRejectedValue(new Error("claude 실패"));
 
@@ -217,6 +264,29 @@ describe("selectCandidates", () => {
             "third",
             "second",
         ]);
+    });
+
+    test("옵션을 켜도 사람이 쓰는 세션과 다른 폴더, 기간 밖의 끝난 세션은 뺀다", () => {
+        const candidates = selectCandidates(
+            [
+                session("ended", { pid: undefined }),
+                session("interactive-ended", {
+                    pid: undefined,
+                    isBackground: false,
+                }),
+                session("elsewhere-ended", {
+                    pid: undefined,
+                    workingDirectory: "/elsewhere",
+                }),
+                session("old-ended", {
+                    pid: undefined,
+                    startedAtMs: NOW_MS - 8 * DAY_MS,
+                }),
+            ],
+            { ...criteria, shouldIncludeEndedSessions: true },
+        );
+
+        expect(candidates.map(({ sessionId }) => sessionId)).toEqual(["ended"]);
     });
 });
 

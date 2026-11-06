@@ -22,8 +22,16 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 ## 세션을 고르는 순서
 
 1. **대화 연결:** Conversation Key 에 연결된 세션이 메시지를 받을 수 있으면 LLM 없이 그 세션으로 보냅니다.
-2. **LLM 매칭:** 살아 있고 작업 폴더가 같은 최근 세션을 후보로 비교합니다.
+2. **LLM 매칭:** 살아 있고 작업 폴더가 같은 최근 세션을 후보로 비교합니다. Include Ended Sessions 를 켜면 끝난 백그라운드 세션도 비교합니다.
 3. **새 세션:** 확신이 `high` 가 아니거나 후보가 없으면 새 세션으로 판정합니다.
+
+`routing.action` 값에 따라 다음 노드를 나눕니다.
+
+| 값        | 뜻                      | 다음 노드                                                                                      |
+| --------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `deliver` | 살아 있는 세션을 골랐음 | Deliver                                                                                        |
+| `resume`  | 끝난 세션을 골랐음      | [n8n-claude-cli](../n8n-claude-cli) Background 모드의 Resume Session ID 에 `routing.sessionId` |
+| `new`     | 이어 갈 세션이 없음     | n8n-claude-cli Background 모드, 그 뒤에 Remember                                               |
 
 ## 주요 설정
 
@@ -33,6 +41,7 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 | Routing Instructions     |         | 고정 규칙 뒤에 붙는 매칭 기준                            |
 | Max Candidates           | `20`    | 후보 세션 수                                             |
 | Candidate Max Age (Days) | `7`     | 이보다 오래된 세션은 후보에서 뺍니다                     |
+| Include Ended Sessions   | 끔      | 끝난 백그라운드 세션도 후보로 비교합니다                 |
 | Max Budget (USD)         | `0.2`   |                                                          |
 | Timeout (Seconds)        | `60`    |                                                          |
 | Store Path               |         | 비우면 `~/.n8n/claude-router/conversation-sessions.json` |
@@ -45,4 +54,5 @@ Deliver 는 프로세스가 살아 있는 세션에만 보낼 수 있습니다. 
 
 ## 한계
 
-전달에 쓰는 세션 주소는 공개되지 않은 `claude` 내부 형식입니다. 형식이 바뀌면 전달은 실패로 드러납니다.
+- 전달에 쓰는 세션 주소는 공개되지 않은 `claude` 내부 형식입니다. 형식이 바뀌면 전달은 실패로 드러납니다.
+- Claude CLI 노드로 끝난 세션을 이어 가면 대화를 복사한 새 세션 ID 가 생기고 원본은 그대로 남습니다. 권한과 도구는 원본이 아니라 이번 노드의 설정을 따릅니다.

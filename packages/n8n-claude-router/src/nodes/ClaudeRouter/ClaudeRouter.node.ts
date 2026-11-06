@@ -1,7 +1,12 @@
 import { homedir } from "node:os";
 import path from "node:path";
 
-import { ClaudeCli, listClaudeSessions, type ClaudeSession } from "claude-cli";
+import {
+    buildWakeCommand,
+    ClaudeCli,
+    listClaudeSessions,
+    type ClaudeSession,
+} from "claude-cli";
 import {
     NodeConnectionTypes,
     NodeOperationError,
@@ -17,6 +22,7 @@ import {
     resolveDeliveryTarget,
 } from "../../claude/ClaudeSessionDeliverer";
 import { ClaudeSessionMatcher } from "../../claude/ClaudeSessionMatcher";
+import { resolveWakeTarget } from "../../claude/resolveWakeTarget";
 import { ConversationBindingRule } from "../../routing/ConversationBindingRule";
 import { SessionMatchRule } from "../../routing/SessionMatchRule";
 import { SessionRouter } from "../../routing/SessionRouter";
@@ -86,7 +92,12 @@ function createRouter(
 
     return new SessionRouter(
         [
-            new ConversationBindingRule(store),
+            new ConversationBindingRule(
+                store,
+                options.shouldIncludeEndedSessions
+                    ? { workingDirectory }
+                    : undefined,
+            ),
             new SessionMatchRule(matcher, {
                 workingDirectory,
                 maxCandidates: options.maxCandidates ?? DEFAULT_MAX_CANDIDATES,
@@ -175,6 +186,40 @@ async function deliverItem(
     return { delivered: true, sessionId };
 }
 
+async function wakeItem(
+    context: IExecuteFunctions,
+    itemIndex: number,
+    options: ClaudeRouterOptions,
+): Promise<IDataObject> {
+    const workingDirectory = context.getNodeParameter(
+        "workingDirectory",
+        itemIndex,
+    ) as string;
+    const sessionId = context.getNodeParameter(
+        "sessionId",
+        itemIndex,
+    ) as string;
+    const cancelSignal = context.getExecutionCancelSignal();
+
+    // 라우팅 뒤에 세션이 다시 떴거나 사람이 열었을 수 있어 깨우기 직전에 다시 찾습니다.
+    resolveWakeTarget(
+        await listSessions(options, workingDirectory, cancelSignal),
+        sessionId,
+        workingDirectory,
+    );
+
+    const session = await createCli(options).startBackground(
+        buildWakeCommand(
+            sessionId,
+            context.getNodeParameter("messageText", itemIndex) as string,
+        ),
+        workingDirectory,
+        cancelSignal,
+    );
+
+    return { ...session };
+}
+
 function rememberItem(
     context: IExecuteFunctions,
     itemIndex: number,
@@ -205,6 +250,9 @@ async function runOperation(
     }
     if (operation === "deliver") {
         return deliverItem(context, itemIndex, options);
+    }
+    if (operation === "wake") {
+        return wakeItem(context, itemIndex, options);
     }
 
     return rememberItem(context, itemIndex, store);
@@ -243,6 +291,12 @@ export class ClaudeRouter implements INodeType {
                             "고른 세션에 복사본 없이 메시지를 넣습니다",
                     },
                     {
+                        name: "Wake",
+                        value: "wake",
+                        description:
+                            "멈춘 세션을 같은 ID 로 깨우고 메시지를 넣습니다",
+                    },
+                    {
                         name: "Remember",
                         value: "remember",
                         description: "대화와 새로 띄운 세션을 연결합니다",
@@ -258,8 +312,10 @@ export class ClaudeRouter implements INodeType {
                 default: "",
                 placeholder: "={{ $json.text }}",
                 description:
-                    "Route 는 세션을 고를 때 읽고, Deliver 는 세션에 넣습니다",
-                displayOptions: { show: { operation: ["route", "deliver"] } },
+                    "Route 는 세션을 고를 때 읽고, Deliver 와 Wake 는 세션에 넣습니다",
+                displayOptions: {
+                    show: { operation: ["route", "deliver", "wake"] },
+                },
             },
             {
                 displayName: "Source",
@@ -302,7 +358,11 @@ export class ClaudeRouter implements INodeType {
                 placeholder: "/Users/me/project",
                 description:
                     "이 폴더에서 시작한 세션만 후보이자 수신자가 됩니다. Claude CLI 노드와 같은 절대 경로를 넣습니다.",
-                displayOptions: { show: { operation: ["route", "deliver"] } },
+                displayOptions: {
+                    show: {
+                        operation: ["route", "deliver", "wake"],
+                    },
+                },
             },
             {
                 displayName: "Session ID",
@@ -311,7 +371,7 @@ export class ClaudeRouter implements INodeType {
                 required: true,
                 default: "={{ $json.routing.sessionId }}",
                 description: "Route 결과의 sessionId",
-                displayOptions: { show: { operation: ["deliver"] } },
+                displayOptions: { show: { operation: ["deliver", "wake"] } },
             },
             {
                 displayName: "Session ID",

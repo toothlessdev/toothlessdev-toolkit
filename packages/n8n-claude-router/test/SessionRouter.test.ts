@@ -5,6 +5,7 @@ import path from "node:path";
 import type { ClaudeSession } from "claude-cli";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { resolveWakeTarget } from "../src/claude/resolveWakeTarget";
 import { ConversationBindingRule } from "../src/routing/ConversationBindingRule";
 import {
     SessionMatchRule,
@@ -127,6 +128,65 @@ describe("SessionRouter", () => {
         });
     });
 
+    describe("끝난 세션 이어 가기를 켠 대화 연결", () => {
+        function createResumingRouter(sessions: ClaudeSession[]) {
+            return new SessionRouter(
+                [
+                    new ConversationBindingRule(store, {
+                        workingDirectory: WORKING_DIRECTORY,
+                    }),
+                    new SessionMatchRule({ match }, criteria),
+                ],
+                async () => sessions,
+            );
+        }
+
+        test("연결된 세션이 끝났으면 LLM 없이 resume 한다", async () => {
+            store.remember(CONVERSATION_KEY, "bound");
+
+            const decision = await createResumingRouter([
+                session("bound", { pid: undefined }),
+            ]).route(message);
+
+            expect(decision).toMatchObject({
+                action: "resume",
+                sessionId: "bound",
+                ruleName: "conversation-binding",
+            });
+            expect(match).not.toHaveBeenCalled();
+        });
+
+        test("연결된 세션이 살아 있으면 그대로 전달한다", async () => {
+            store.remember(CONVERSATION_KEY, "bound");
+
+            const decision = await createResumingRouter([
+                session("bound"),
+            ]).route(message);
+
+            expect(decision.action).toBe("deliver");
+        });
+
+        test.each([
+            [
+                "다른 폴더의 끝난 세션",
+                session("bound", {
+                    pid: undefined,
+                    workingDirectory: "/elsewhere",
+                }),
+            ],
+            [
+                "사람이 쓰던 끝난 세션",
+                session("bound", { pid: undefined, isBackground: false }),
+            ],
+        ])("%s 은 resume 하지 않는다", async (_, bound) => {
+            store.remember(CONVERSATION_KEY, "bound");
+
+            const decision = await createResumingRouter([bound]).route(message);
+
+            expect(decision.action).toBe("new");
+        });
+    });
+
     test("LLM 이 확신하면 고른 세션으로 전달한다", async () => {
         match.mockResolvedValue({
             sessionId: "a",
@@ -242,6 +302,32 @@ describe("SessionRouter", () => {
         await expect(
             createRouter([session("a")]).route(message),
         ).rejects.toThrow("claude 실패");
+    });
+});
+
+describe("resolveWakeTarget", () => {
+    const ended = session("s1", { pid: undefined });
+
+    test("같은 폴더의 멈춘 백그라운드 세션을 돌려준다", () => {
+        expect(resolveWakeTarget([ended], "s1", WORKING_DIRECTORY)).toBe(ended);
+    });
+
+    test.each([
+        ["없는 세션", []],
+        ["살아 있는 세션", [session("s1")]],
+        ["다른 폴더의 세션", [{ ...ended, workingDirectory: "/elsewhere" }]],
+        [
+            "사람이 쓰던 세션",
+            [session("s1", { pid: undefined, isBackground: false })],
+        ],
+        [
+            "사람이 Desktop 에서 열어 둔 세션",
+            [ended, session("s1", { isBackground: false })],
+        ],
+    ])("%s 은 깨우지 않는다", (_, sessions) => {
+        expect(() =>
+            resolveWakeTarget(sessions, "s1", WORKING_DIRECTORY),
+        ).toThrow("깨울 수 없는 세션");
     });
 });
 

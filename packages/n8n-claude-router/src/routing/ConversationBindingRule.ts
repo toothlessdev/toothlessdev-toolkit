@@ -1,10 +1,16 @@
 import type { ConversationSessionStore } from "../store/ConversationSessionStore";
 import {
     canReceiveMessage,
+    canResume,
     type RoutingContext,
     type RoutingDecision,
     type RoutingRule,
 } from "./BaseRoutingRule";
+
+export interface EndedSessionResumption {
+    /** --resume 은 세션을 시작한 폴더에서만 대화를 찾습니다. */
+    readonly workingDirectory: string;
+}
 
 /**
  * 같은 대화의 입력은 LLM 없이 저장된 세션으로 보냅니다.
@@ -13,7 +19,10 @@ import {
 export class ConversationBindingRule implements RoutingRule {
     readonly name = "conversation-binding";
 
-    constructor(private readonly store: ConversationSessionStore) {}
+    constructor(
+        private readonly store: ConversationSessionStore,
+        private readonly endedSessionResumption?: EndedSessionResumption,
+    ) {}
 
     async decide({
         message,
@@ -27,7 +36,22 @@ export class ConversationBindingRule implements RoutingRule {
         const session = sessions.find(
             (candidate) => candidate.sessionId === sessionId,
         );
-        if (!session || !canReceiveMessage(session)) return null;
+        if (!session) return null;
+
+        if (
+            this.endedSessionResumption &&
+            canResume(session) &&
+            session.workingDirectory ===
+                this.endedSessionResumption.workingDirectory
+        ) {
+            return {
+                action: "resume",
+                sessionId,
+                reason: "이 대화에 연결된 끝난 세션입니다",
+            };
+        }
+
+        if (!canReceiveMessage(session)) return null;
 
         return {
             action: "deliver",

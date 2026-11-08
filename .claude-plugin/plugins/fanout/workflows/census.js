@@ -1,7 +1,7 @@
 export const meta = {
   name: 'census',
   description: 'fanout 위에 항목별 판정(ok/issue/n/a/unknown)과 ok 반증을 얹은 전수조사 프리셋',
-  whenToUse: '대상 목록이 확정된 전수조사. args: { items, criteria, root?, shardSize?, maxRounds?, auditRatio? }',
+  whenToUse: '대상 목록이 확정된 전수조사. args: { items, criteria, root?, shardSize?, maxRounds?, auditRatio?, readGate?, lineCountByItem?, lineBudget? }',
   phases: [{ title: 'Fanout', detail: 'fanout 워크플로에 판정 프롬프트와 반증 설정을 넘긴다' }],
 }
 
@@ -66,6 +66,9 @@ const fanoutResult = await workflow('fanout:fanout', {
   root: args.root,
   shardSize: args.shardSize,
   maxRounds: args.maxRounds,
+  readGate: args.readGate,
+  lineCountByItem: args.lineCountByItem,
+  lineBudget: args.lineBudget,
   prompt: buildJudgePrompt(args.criteria),
   schema: VERDICT_SCHEMA,
   audit: {

@@ -1,0 +1,38 @@
+{
+  "description": "fanout:investigator 에이전트가 맡은 파일을 Read 로 전부 읽었는지 기록하고, 다 읽기 전에는 결과 제출을 막습니다",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^Read$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/read-gate.mjs\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^StructuredOutput$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/read-gate.mjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^fanout:investigator$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/read-gate.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

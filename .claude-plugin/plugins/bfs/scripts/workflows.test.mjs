@@ -190,15 +190,146 @@ describe("traverse critic 집계", () => {
         assert.equal(result.criticFailedRounds, 0);
     });
 
-    test("critic 이 실패한 라운드 다음 라운드에서 다시 점검한다", async () => {
+    test("critic 이 실패하면 기본 criticRounds 1 에서도 같은 라운드 안에서 다시 시도한다", async () => {
         const result = await runTraverse(
-            { ...TRAVERSE_ARGS, criticRounds: 2 },
+            TRAVERSE_ARGS,
             traverseAgent((callCount) =>
                 callCount === 1 ? null : { gaps: [] },
             ),
         );
 
-        assert.equal(result.criticFailedRounds, 1);
+        assert.equal(result.criticFailedRounds, 0);
         assert.equal(result.criticCompletedRounds, 1);
+    });
+});
+
+describe("traverse 노드 정규화", () => {
+    test("root 끝에 / 가 있어도 절대경로 자식을 상대경로 노드와 같게 본다", async () => {
+        const agent = async (prompt, options) => {
+            if (options.phase === "Critic") return { gaps: [] };
+
+            return {
+                rows: listedItems(prompt).map((node) => ({
+                    node,
+                    result: "",
+                    children:
+                        node === "a.ts" ? ["/repo/b.ts", "/repo/a.ts"] : [],
+                })),
+            };
+        };
+
+        const result = await runTraverse(
+            { seeds: ["a.ts"], prompt: "순회:\n{{nodes}}", root: "/repo/" },
+            agent,
+        );
+
+        assert.deepEqual(
+            result.rows.map((row) => row.node),
+            ["a.ts", "b.ts"],
+        );
+    });
+});
+
+describe("bfs 인자 검증과 응답 형식", () => {
+    test("audit.ratio 가 0 이면 시작할 때 거부한다", async () => {
+        await assert.rejects(
+            runBfs(
+                { ...BFS_ARGS, audit: { ...BFS_ARGS.audit, ratio: 0 } },
+                bfsAgent(() => null),
+            ),
+            /audit.ratio/,
+        );
+    });
+
+    test("coverage: false 와 audit 를 같이 넘기면 시작할 때 거부한다", async () => {
+        await assert.rejects(
+            runBfs(
+                { ...BFS_ARGS, coverage: false },
+                bfsAgent(() => null),
+            ),
+            /coverage: false 와 함께/,
+        );
+    });
+
+    test("coverage 를 켜고 rows[].item 이 없는 schema 를 넘기면 시작할 때 거부한다", async () => {
+        await assert.rejects(
+            runBfs(
+                {
+                    ...BFS_ARGS,
+                    audit: undefined,
+                    schema: {
+                        type: "object",
+                        properties: { summary: { type: "string" } },
+                    },
+                },
+                bfsAgent(() => null),
+            ),
+            /rows\[\]\.item/,
+        );
+    });
+
+    test("rows 가 배열이 아닌 응답은 실패한 샤드로 세고 다음 라운드에 다시 넣는다", async () => {
+        let runCallCount = 0;
+        const agent = async (prompt, options) => {
+            if (options.phase !== "Run") return null;
+
+            runCallCount++;
+            if (runCallCount === 1) return { rows: "망가진 응답" };
+            return {
+                rows: listedItems(prompt).map((item) => ({
+                    item,
+                    result: "ok",
+                })),
+            };
+        };
+
+        const result = await runBfs({ ...BFS_ARGS, audit: undefined }, agent);
+
+        assert.equal(result.covered, 4);
+        assert.deepEqual(result.missing, []);
+    });
+
+    test("반증 에이전트가 item 에 앞선 결과까지 붙여 돌려줘도 같은 항목으로 센다", async () => {
+        const agent = bfsAgent((items) => ({
+            rows: items.map((item) => ({
+                item: `- ${item} | 앞선 결과: {"result":"ok"}`,
+                refuted: false,
+                reason: "",
+            })),
+        }));
+
+        const result = await runBfs(BFS_ARGS, agent);
+
+        assert.equal(result.audit.verifiedCount, 4);
+        assert.deepEqual(result.audit.unverified, []);
+    });
+
+    test("lineCountByItem 을 넘기면 반증 샤드도 줄 예산으로 나눈다", async () => {
+        const auditShardSizes = [];
+        const agent = async (prompt, options) => {
+            const items = listedItems(prompt);
+            if (options.phase === "Run")
+                return { rows: items.map((item) => ({ item, result: "ok" })) };
+
+            auditShardSizes.push(items.length);
+            return {
+                rows: items.map((item) => ({
+                    item,
+                    refuted: false,
+                    reason: "",
+                })),
+            };
+        };
+
+        await runBfs(
+            {
+                ...BFS_ARGS,
+                lineBudget: 100,
+                lineCountByItem: { a: 60, b: 60, c: 30, d: 30 },
+            },
+            agent,
+        );
+
+        assert.deepEqual(auditShardSizes, [1, 2, 1]);
     });
 });

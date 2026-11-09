@@ -8,7 +8,12 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildDenyReason, judgeItem, toReadRecord } from "./read-ledger.mjs";
+import {
+    buildDenyReason,
+    judgeItem,
+    normalizeSubmittedItem,
+    toReadRecord,
+} from "./read-ledger.mjs";
 
 /**
  * hooks.json 의 hook 은 전역이라 모든 세션과 에이전트의 도구 호출에 실행됩니다.
@@ -75,9 +80,9 @@ function gateSubmission(hookInput, ledgerPath) {
         ...new Set(
             rows
                 .map((row) => row?.item)
-                .filter(
-                    (item) => typeof item === "string" && item.trim() !== "",
-                ),
+                .filter((item) => typeof item === "string")
+                .map(normalizeSubmittedItem)
+                .filter((item) => item !== ""),
         ),
     ];
     const records = loadRecords(ledgerPath);
@@ -134,11 +139,22 @@ if (hookInput.agent_type === INVESTIGATOR_AGENT_TYPE) {
         }
     }
 
+    /**
+     * 기록에 실패해도 Read 자체는 막지 않습니다. 그 구간은 원장에 없으므로 제출 때
+     * 읽지 않은 구간으로 거부되고, 원인은 stderr 로 남겨 디버그 로그에서 찾을 수 있게 합니다.
+     */
     if (
         hookInput.hook_event_name === "PostToolUse" &&
         hookInput.tool_name === "Read"
-    )
-        recordRead(hookInput, ledgerPath);
+    ) {
+        try {
+            recordRead(hookInput, ledgerPath);
+        } catch (error) {
+            process.stderr.write(
+                `bfs Read 게이트: Read 기록 실패(${describeError(error)}), 원장 ${ledgerPath}\n`,
+            );
+        }
+    }
     if (hookInput.hook_event_name === "SubagentStop")
         rmSync(ledgerPath, { force: true });
 }

@@ -26,7 +26,7 @@ disable-model-invocation: true
 
      ```bash
      git ls-files -- '<pathspec>' | while IFS= read -r f; do
-       if [ -f "$f" ] && { [ ! -s "$f" ] || grep -Iq . "$f"; }; then printf '%s\t%s\n' "$f" "$(wc -l < "$f" | tr -d ' ')"; fi
+       if [ -f "$f" ] && [ "${f##*.}" != ipynb ] && { [ ! -s "$f" ] || grep -Iq . "$f"; }; then printf '%s\t%s\n' "$f" "$(wc -l < "$f" | tr -d ' ')"; fi
      done
      ```
 

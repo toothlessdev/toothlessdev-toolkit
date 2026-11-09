@@ -36,7 +36,7 @@ disable-model-invocation: true
    - 예상 에이전트 수와 계산식
      - `bfs`, `census`: 항목 수 ÷ `shardSize` 가 한 라운드의 샤드 수입니다. 최대 `maxRounds` 만큼 곱하고, 반증은 표본 수 ÷ 10 에 최대 `maxRounds` 를 곱해 더합니다(응답이 빠진 표본만 다시 넣습니다).
      - `lineCountByItem` 을 넘기면 한 라운드의 샤드 수는 줄 수 합 ÷ `lineBudget` 이상입니다. 혼자 예산을 넘는 파일은 샤드 하나를 차지합니다.
-     - `traverse`: 노드 수 ÷ `shardSize` 에 레벨 수의 재투입 여지를 더하고, 점검 에이전트 1개를 더합니다. 상한은 `maxNodes` 로 정해집니다.
+     - `traverse`: 노드 수 ÷ `shardSize` 에 레벨 수의 재투입 여지를 더하고, 점검 에이전트를 `criticRounds` 개(실패 시 라운드마다 최대 `maxRounds` 번) 더합니다. 상한은 `maxNodes` 로 정해집니다.
    - 이 방식이 보장하지 못하는 것 한 줄
    - 사용자의 승인을 받기 전에는 실행하지 않습니다.
 

@@ -29,6 +29,7 @@ disable-model-invocation: true
 
 3. 상한 정하기
    - 사용자가 말하지 않았으면 `maxDepth` 5, `maxNodes` 300 으로 둡니다.
+   - 시작 노드가 depth 0 입니다. `maxDepth` 5 면 시작 노드에서 5단계 떨어진 노드까지, 레벨 6개를 처리합니다.
    - 예상 노드 수가 상한에 가까우면 실행 전에 알리고 확인합니다.
 
 4. 워크플로 실행
@@ -43,5 +44,6 @@ disable-model-invocation: true
    - `truncated` 가 있으면 완료라고 말하지 않습니다. 상한(`maxDepth`, `maxNodes`)에 걸려 열지 못한 노드를 그대로 보여 줍니다.
    - `missing` 은 재투입 후에도 처리되지 못한 노드이므로 따로 보여 줍니다.
    - `criticGaps` 는 마지막 점검에서 나온 놓친 연결입니다. 어떤 시작점이 추가돼 다시 돌았는지 함께 말합니다.
+   - 점검 에이전트는 실패하면 한 라운드 안에서 `maxRounds` 번까지 다시 시도합니다. `criticFailedRounds` 는 그래도 결과를 못 낸 라운드 수입니다.
    - `criticCompletedRounds` 가 0 이면 점검 에이전트가 한 번도 결과를 내지 못한 것입니다. 이때 `criticGaps` 가 비어 있어도 놓친 연결이 없다고 말하지 않고, `criticFailedRounds` 와 함께 점검이 되지 않았다고 밝힙니다.
    - 이 방식은 자식을 에이전트가 찾으므로, 에이전트가 연결을 보지 못한 가지는 열리지 않습니다. 결과가 확정된 전수가 아니라는 점을 보고에 한 줄로 밝힙니다.

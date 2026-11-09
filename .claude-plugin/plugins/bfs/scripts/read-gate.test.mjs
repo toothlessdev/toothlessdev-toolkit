@@ -369,6 +369,14 @@ describe("judgeItem: 항목 종류별 판정", () => {
             "not-file",
         );
     });
+
+    test("Read 가 텍스트 구간으로 돌려주지 않는 .ipynb 는 not-text-read", () => {
+        const filePath = writeFixture("judge/note.ipynb", '{"cells": []}\n');
+        assert.equal(
+            judgeItem(filePath, [], workDirectory).status,
+            "not-text-read",
+        );
+    });
 });
 
 describe("suggestReadLimit: 256KB 제한 안에서 나눠 읽을 limit", () => {
@@ -453,7 +461,10 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
                 type: "text",
                 file: {
                     filePath,
-                    content: "",
+                    content: readFileSync(filePath, "utf8")
+                        .split("\n")
+                        .slice(startLine - 1, startLine - 1 + numLines)
+                        .join("\n"),
                     numLines,
                     startLine,
                     totalLines,
@@ -607,6 +618,46 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
         assert.doesNotMatch(
             readFileSync(ledgerPathOf("agent-content"), "utf8"),
             /secret/,
+        );
+    });
+
+    test("Read 와 hook 사이에 파일이 바뀌면 그 읽기는 기록하지 않는다", () => {
+        const filePath = writeFixture("gate/raced.txt", lines(2));
+        const staleRead = readEvent("agent-raced", filePath, 1, 2, 2);
+        writeFileSync(filePath, "changed 1\nchanged 2");
+        runGate(staleRead);
+        const output = runGate(submitEvent("agent-raced", [filePath]));
+        assert.match(
+            output.hookSpecificOutput.permissionDecisionReason,
+            /읽은 기록이 없습니다/,
+        );
+    });
+
+    test("불릿과 반증용 앞선 결과를 붙인 item 도 같은 파일로 판정한다", () => {
+        const filePath = writeFixture("gate/decorated.txt", lines(2));
+        runGate(readEvent("agent-decorated", filePath, 1, 2, 2));
+        assert.equal(
+            runGate(
+                submitEvent("agent-decorated", [
+                    `- ${filePath} | 앞선 결과: {"verdict":"ok"}`,
+                ]),
+            ),
+            null,
+        );
+    });
+
+    test("원장을 쓸 수 없어도 hook 은 Read 를 막지 않고 정상 종료한다", () => {
+        const filePath = writeFixture("gate/unrecordable.txt", lines(2));
+        writeFixture("plugin-data/read-ledger/session-blocked", "not a dir");
+        assert.equal(
+            runGateWithRawInput(
+                JSON.stringify({
+                    ...readEvent("agent-blocked", filePath, 1, 2, 2),
+                    session_id: "session-blocked",
+                    cwd: workDirectory,
+                }),
+            ),
+            null,
         );
     });
 });

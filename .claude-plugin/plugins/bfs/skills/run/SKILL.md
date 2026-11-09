@@ -49,3 +49,4 @@ disable-model-invocation: true
    - `readGate` 를 켰다면 `missing` 에는 끝내 전문을 읽지 못한 항목도 들어 있습니다. 게이트는 Read 로 읽었는지만 보장하고, 읽은 내용을 제대로 판단했는지는 보장하지 않는다고 한 줄로 밝힙니다.
    - `audit.disputed` 는 반증에서 뒤집힌 항목이므로 따로 보여 줍니다.
    - 반증은 표본만 검사합니다. `audit.notSampledCount` 를 같이 밝힙니다.
+   - `audit.unverified` 는 표본으로 뽑혔지만 `maxRounds` 까지 반증 응답을 받지 못한 항목입니다. 비어 있지 않으면 반증이 끝났다고 말하지 않고, `audit.sampledCount` 대비 `audit.verifiedCount` 와 함께 그대로 보여 줍니다.

@@ -193,6 +193,8 @@ const firstPass = await exploreFrom(args.seeds, state)
 const missing = [...firstPass.missing]
 const truncated = [...firstPass.truncated]
 const gaps = []
+let criticFailedRounds = 0
+let criticCompletedRounds = 0
 
 phase('Critic')
 for (let round = 1; round <= criticRounds; round++) {
@@ -206,7 +208,14 @@ for (let round = 1; round <= criticRounds; round++) {
     phase: 'Critic',
     schema: CRITIC_SCHEMA,
   })
-  if (!critique || critique.gaps.length === 0) break
+  if (!critique) {
+    criticFailedRounds++
+    log(`critic #${round} 이 결과 없이 끝남`)
+    continue
+  }
+
+  criticCompletedRounds++
+  if (critique.gaps.length === 0) break
 
   gaps.push(...critique.gaps)
   const newSeeds = critique.gaps.flatMap((gap) => gap.newSeeds)
@@ -221,5 +230,7 @@ return {
   missing,
   truncated,
   criticGaps: gaps,
+  criticCompletedRounds,
+  criticFailedRounds,
   rows: [...state.visited.values()],
 }

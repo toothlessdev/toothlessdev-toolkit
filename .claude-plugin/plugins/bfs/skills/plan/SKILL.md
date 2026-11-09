@@ -34,7 +34,7 @@ disable-model-invocation: true
    - 선택한 워크플로와 이유
    - `args` 전체 (프롬프트 원문 포함)
    - 예상 에이전트 수와 계산식
-     - `bfs`, `census`: 항목 수 ÷ `shardSize` 가 한 라운드의 샤드 수입니다. 최대 `maxRounds` 만큼 곱하고, 반증은 표본 수 ÷ 10 을 더합니다.
+     - `bfs`, `census`: 항목 수 ÷ `shardSize` 가 한 라운드의 샤드 수입니다. 최대 `maxRounds` 만큼 곱하고, 반증은 표본 수 ÷ 10 에 최대 `maxRounds` 를 곱해 더합니다(응답이 빠진 표본만 다시 넣습니다).
      - `lineCountByItem` 을 넘기면 한 라운드의 샤드 수는 줄 수 합 ÷ `lineBudget` 이상입니다. 혼자 예산을 넘는 파일은 샤드 하나를 차지합니다.
      - `traverse`: 노드 수 ÷ `shardSize` 에 레벨 수의 재투입 여지를 더하고, 점검 에이전트 1개를 더합니다. 상한은 `maxNodes` 로 정해집니다.
    - 이 방식이 보장하지 못하는 것 한 줄
@@ -50,3 +50,4 @@ disable-model-invocation: true
    - 누락과 상한 도달을 먼저 말합니다. `missing` 이나 `truncated` 가 비어 있지 않으면 완료라고 말하지 않습니다.
    - `census` 는 `verdictCounts` 와 `audit.disputed` 를, `traverse` 는 `criticGaps` 를 따로 보여 줍니다.
    - 반증이 표본만 봤다면 보지 않은 개수를 함께 밝힙니다.
+   - `audit.unverified` 가 비어 있지 않거나 `traverse` 의 `criticCompletedRounds` 가 0 이면 검증이 끝났다고 말하지 않습니다.

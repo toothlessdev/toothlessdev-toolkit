@@ -101,8 +101,8 @@ hook 은 모든 세션의 Read 와 결과 제출에 실행되지만, `bfs:invest
 
 ## 테스트
 
-판정 로직과 hook 스크립트의 테스트는 Node 내장 테스트 러너로 돌립니다. 추가 설치는 필요 없습니다.
+Read 게이트 판정 로직, hook 스크립트, 워크플로의 반증 · critic 집계 테스트는 Node 내장 테스트 러너로 돌립니다. 추가 설치는 필요 없습니다.
 
 ```bash
-node --test .claude-plugin/plugins/bfs/scripts/read-gate.test.mjs
+node --test .claude-plugin/plugins/bfs/scripts/*.test.mjs
 ```

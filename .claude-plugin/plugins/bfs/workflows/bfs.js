@@ -200,28 +200,41 @@ async function runAudit(rows, args) {
   const sample = pickAuditSample(candidates, auditRatio)
   log(`반증 대상 ${candidates.length}개 중 ${sample.length}개 검사 (나머지 ${candidates.length - sample.length}개는 표본 밖)`)
 
-  const auditResults = await parallel(
-    chunk(sample, AUDIT_SHARD_SIZE).map((shard, index) => () =>
-      agent(renderPrompt(args.audit.prompt, '{{auditItems}}', shard.map(toAuditLine), args.root), {
-        label: `audit #${index + 1}`,
-        phase: 'Audit',
-        schema: AUDIT_SCHEMA,
-        ...investigatorOptions(args),
-      }),
-    ),
-  )
+  const auditRowByItem = new Map()
+  let pendingRows = sample
+  let failedShardCount = 0
 
-  const failedShardCount = auditResults.filter((result) => result === null).length
-  if (failedShardCount > 0) log(`반증 샤드 ${failedShardCount}개가 결과 없이 끝남`)
+  for (let round = 1; pendingRows.length > 0 && round <= args.maxRounds; round++) {
+    const pendingItems = new Set(pendingRows.map((row) => row.item))
+    const auditResults = await parallel(
+      chunk(pendingRows, AUDIT_SHARD_SIZE).map((shard, index) => () =>
+        agent(renderPrompt(args.audit.prompt, '{{auditItems}}', shard.map(toAuditLine), args.root), {
+          label: `audit r${round} #${index + 1}`,
+          phase: 'Audit',
+          schema: AUDIT_SCHEMA,
+          ...investigatorOptions(args),
+        }),
+      ),
+    )
 
-  const itemToRow = new Map(rows.map((row) => [row.item, row]))
-  const disputed = auditResults
-    .filter(Boolean)
-    .flatMap((result) => result.rows)
-    .map((row) => ({ ...row, item: normalizeItem(row.item, args) }))
-    .filter((row) => row.refuted && itemToRow.has(row.item))
+    failedShardCount += auditResults.filter((result) => result === null).length
+    for (const row of auditResults.filter(Boolean).flatMap((result) => result.rows)) {
+      const item = normalizeItem(row.item, args)
+      if (pendingItems.has(item) && !auditRowByItem.has(item)) auditRowByItem.set(item, { ...row, item })
+    }
 
-  return { sampledCount: sample.length, notSampledCount: candidates.length - sample.length, failedShardCount, disputed }
+    pendingRows = sample.filter((row) => !auditRowByItem.has(row.item))
+    log(`반증 round ${round}: 응답 ${auditRowByItem.size}/${sample.length}, 미검증 ${pendingRows.length}`)
+  }
+
+  return {
+    sampledCount: sample.length,
+    verifiedCount: auditRowByItem.size,
+    unverified: pendingRows.map((row) => row.item),
+    notSampledCount: candidates.length - sample.length,
+    failedShardCount,
+    disputed: [...auditRowByItem.values()].filter((row) => row.refuted),
+  }
 }
 
 function normalizeLineCounts(lineCountByItem, args) {

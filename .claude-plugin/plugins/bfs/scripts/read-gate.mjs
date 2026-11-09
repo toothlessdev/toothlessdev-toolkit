@@ -14,12 +14,12 @@ import { buildDenyReason, judgeItem, toReadRecord } from "./read-ledger.mjs";
  * hooks.json 의 hook 은 전역이라 모든 세션과 에이전트의 도구 호출에 실행됩니다.
  * plugin agent 는 frontmatter hooks 가 무시되므로 여기서 agent_type 으로 걸러야 합니다.
  */
-const INVESTIGATOR_AGENT_TYPE = "fanout:investigator";
+const INVESTIGATOR_AGENT_TYPE = "bfs:investigator";
 
 function ledgerPathOf(hookInput) {
     const dataDirectory =
         process.env.CLAUDE_PLUGIN_DATA ??
-        path.join(tmpdir(), "fanout-plugin-data");
+        path.join(tmpdir(), "bfs-plugin-data");
     const safeSegment = (value) =>
         String(value ?? "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
     return path.join(
@@ -59,7 +59,7 @@ function denySubmission(reason) {
 }
 
 /**
- * fanout 워크플로는 readGate 를 켜면 schema 에 rows[].item 이 있는지 시작할 때 검사합니다.
+ * bfs 워크플로는 readGate 를 켜면 schema 에 rows[].item 이 있는지 시작할 때 검사합니다.
  * 그래서 rows 가 없는 investigator 제출은 판정할 수 없는 제출로 보고 거부합니다.
  */
 function gateSubmission(hookInput, ledgerPath) {

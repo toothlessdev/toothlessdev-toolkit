@@ -78,14 +78,14 @@ claude plugin marketplace add toothlessdev/toothlessdev-toolkit
 ```
 
 ```bash
-claude plugin install fanout@toothlessdev-toolkit
+claude plugin install bfs@toothlessdev-toolkit
 ```
 
-| 플러그인                                | 하는 일                                                | 실행                                               |
-| --------------------------------------- | ------------------------------------------------------ | -------------------------------------------------- |
-| [adhd](.claude-plugin/plugins/adhd)     | 작업 마비 부수기, 체크인 같은 실행 지원 도구           | `/adhd:paralysis`, `/adhd:checkin` 등              |
-| [beaker](.claude-plugin/plugins/beaker) | 명세와 구현에서 테스트를 따로 만들어 불일치를 찾습니다 | `/beaker:beaker`                                   |
-| [fanout](.claude-plugin/plugins/fanout) | 확정한 목록을 나눠 병렬로 처리합니다                   | `/fanout:run`, `/fanout:plan`, `/fanout:recursive` |
+| 플러그인                                | 하는 일                                                | 실행                                      |
+| --------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| [adhd](.claude-plugin/plugins/adhd)     | 작업 마비 부수기, 체크인 같은 실행 지원 도구           | `/adhd:paralysis`, `/adhd:checkin` 등     |
+| [beaker](.claude-plugin/plugins/beaker) | 명세와 구현에서 테스트를 따로 만들어 불일치를 찾습니다 | `/beaker:beaker`                          |
+| [bfs](.claude-plugin/plugins/bfs)       | 확정한 목록을 나눠 병렬로 처리합니다                   | `/bfs:run`, `/bfs:plan`, `/bfs:recursive` |
 
 ## Scripts
 

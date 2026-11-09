@@ -31,7 +31,7 @@ import {
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const gateScriptPath = path.join(scriptDirectory, "read-gate.mjs");
 const workDirectory = realpathSync(
-    mkdtempSync(path.join(tmpdir(), "fanout-read-gate-")),
+    mkdtempSync(path.join(tmpdir(), "bfs-read-gate-")),
 );
 
 after(() => rmSync(workDirectory, { recursive: true, force: true }));
@@ -447,7 +447,7 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
         return {
             hook_event_name: "PostToolUse",
             tool_name: "Read",
-            agent_type: "fanout:investigator",
+            agent_type: "bfs:investigator",
             agent_id: agentId,
             tool_response: {
                 type: "text",
@@ -462,7 +462,7 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
         };
     }
 
-    function submitEvent(agentId, items, agentType = "fanout:investigator") {
+    function submitEvent(agentId, items, agentType = "bfs:investigator") {
         return {
             hook_event_name: "PreToolUse",
             tool_name: "StructuredOutput",
@@ -543,7 +543,7 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
 
     test("fail-closed: 해석할 수 없는 입력이 investigator 제출로 보이면 거부한다", () => {
         const output = runGateWithRawInput(
-            '{"agent_type":"fanout:investigator","tool_name":"StructuredOutput",',
+            '{"agent_type":"bfs:investigator","tool_name":"StructuredOutput",',
         );
         assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
         assert.match(
@@ -571,7 +571,7 @@ describe("read-gate.mjs: hook 입력에 대한 동작", () => {
         assert.equal(existsSync(ledgerPathOf("agent-cleanup")), true);
         runGate({
             hook_event_name: "SubagentStop",
-            agent_type: "fanout:investigator",
+            agent_type: "bfs:investigator",
             agent_id: "agent-cleanup",
         });
         assert.equal(existsSync(ledgerPathOf("agent-cleanup")), false);

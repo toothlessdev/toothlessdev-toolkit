@@ -1,15 +1,15 @@
 ---
 name: recursive
-description: "/fanout:recursive <순회 요청> 으로 호출하면 시작 노드에서 출발해 연결을 따라가며 새 노드가 안 나올 때까지 순회 조사합니다. 대상 목록을 미리 뽑을 수 없을 때 씁니다. 사용자가 직접 입력했을 때만 씁니다."
+description: "/bfs:recursive <순회 요청> 으로 호출하면 시작 노드에서 출발해 연결을 따라가며 새 노드가 안 나올 때까지 순회 조사합니다. 대상 목록을 미리 뽑을 수 없을 때 씁니다. 사용자가 직접 입력했을 때만 씁니다."
 argument-hint: "<어디서 출발해 무엇을 따라갈지>"
 disable-model-invocation: true
 ---
 
-# /fanout:recursive
+# /bfs:recursive
 
 - 목적: 노드를 처리해야 다음 노드가 나오는 순회형 조사를 레벨별로 돌립니다. 방문 기록, 중복 제거, 깊이와 개수 상한은 코드가 관리합니다.
 - 이 스킬 호출이 곧 Workflow 도구 사용 승인입니다.
-- 목록을 미리 뽑을 수 있으면 이 스킬이 아니라 `/fanout:run` 을 씁니다.
+- 목록을 미리 뽑을 수 있으면 이 스킬이 아니라 `/bfs:run` 을 씁니다.
 
 ## 요청
 
@@ -32,7 +32,7 @@ disable-model-invocation: true
    - 예상 노드 수가 상한에 가까우면 실행 전에 알리고 확인합니다.
 
 4. 워크플로 실행
-   - Workflow 도구를 `name: "fanout:traverse"` 로 호출합니다.
+   - Workflow 도구를 `name: "bfs:traverse"` 로 호출합니다.
    - `args`: `{ seeds, prompt, root?, shardSize?, maxDepth?, maxNodes?, maxRounds?, criticRounds? }` 를 JSON 값으로 넘깁니다.
    - `prompt` 에는 `{{nodes}}` 자리표시자를 반드시 넣습니다. 샤드의 노드가 거기에 들어갑니다.
    - `prompt` 에 자식을 찾는 규칙을 구체적으로 적습니다. 어떤 연결을 따라가고 어떤 연결은 따라가지 않는지 적습니다.

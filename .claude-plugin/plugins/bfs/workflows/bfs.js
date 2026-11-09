@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'fanout',
+  name: 'bfs',
   description: '항목 목록을 샤드로 나눠 같은 프롬프트를 병렬 실행하고, 필요하면 누락 재투입과 표본 반증까지 한다',
   whenToUse: '목록이 이미 확정된 병렬 작업. args: { items, prompt, schema?, coverage?, shardSize?, maxRounds?, audit?, root?, readGate?, lineCountByItem?, lineBudget? }',
   phases: [
@@ -15,7 +15,7 @@ const AUDIT_SHARD_SIZE = 10
 const DEFAULT_LINE_BUDGET = 3000
 
 // hooks/hooks.json 의 Read 게이트가 이 agent_type 에만 걸립니다.
-const INVESTIGATOR_AGENT_TYPE = 'fanout:investigator'
+const INVESTIGATOR_AGENT_TYPE = 'bfs:investigator'
 
 const DEFAULT_ROW_SCHEMA = {
   type: 'object',

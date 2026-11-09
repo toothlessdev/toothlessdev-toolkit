@@ -1,5 +1,5 @@
 {
-  "name": "fanout",
+  "name": "bfs",
   "description": "목록을 코드로 확정해 병렬로 처리하는 조사 워크플로",
   "author": {
     "name": "toothlessdev",

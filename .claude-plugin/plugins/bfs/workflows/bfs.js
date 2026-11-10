@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'fanout',
+  name: 'bfs',
   description: '항목 목록을 샤드로 나눠 같은 프롬프트를 병렬 실행하고, 필요하면 누락 재투입과 표본 반증까지 한다',
   whenToUse: '목록이 이미 확정된 병렬 작업. args: { items, prompt, schema?, coverage?, shardSize?, maxRounds?, audit?, root?, readGate?, lineCountByItem?, lineBudget? }',
   phases: [
@@ -15,7 +15,7 @@ const AUDIT_SHARD_SIZE = 10
 const DEFAULT_LINE_BUDGET = 3000
 
 // hooks/hooks.json 의 Read 게이트가 이 agent_type 에만 걸립니다.
-const INVESTIGATOR_AGENT_TYPE = 'fanout:investigator'
+const INVESTIGATOR_AGENT_TYPE = 'bfs:investigator'
 
 const DEFAULT_ROW_SCHEMA = {
   type: 'object',
@@ -99,11 +99,12 @@ function normalizePath(rawPath, root) {
 }
 
 /**
- * 프롬프트에 항목을 `- 항목` 으로 넣기 때문에 에이전트가 불릿까지 붙여 돌려주는 일이 있습니다.
+ * 프롬프트에 항목을 `- 항목` 이나 반증용 `- 항목 | 앞선 결과: ...` 로 넣기 때문에 에이전트가
+ * 불릿이나 뒤쪽 결과까지 붙여 돌려주는 일이 있습니다. hooks 의 read-gate.mjs 도 같은 규칙으로 뗍니다.
  * 경로 정규화는 readGate 일 때만 합니다. 일반 항목은 경로가 아닐 수 있어 `//` 를 줄이면 URL 이 깨집니다.
  */
 function normalizeItem(rawItem, args) {
-  const trimmed = String(rawItem).trim().replace(/^- /, '')
+  const trimmed = String(rawItem).trim().replace(/^- /, '').replace(/ \| 앞선 결과: [\s\S]*$/, '')
   return args.readGate ? normalizePath(trimmed, args.root) : trimmed
 }
 
@@ -140,6 +141,15 @@ function planShards(items, args) {
   return chunkByLineBudget(items, (item) => args.lineCountByItem[item], args.lineBudget, args.shardSize)
 }
 
+function planAuditShards(rows, args) {
+  if (!args.lineCountByItem) return chunk(rows, AUDIT_SHARD_SIZE)
+  return chunkByLineBudget(rows, (row) => args.lineCountByItem[row.item], args.lineBudget, AUDIT_SHARD_SIZE)
+}
+
+function hasRows(result) {
+  return Array.isArray(result?.rows)
+}
+
 async function runWithCoverage(items, args) {
   const rowByItem = new Map()
   let pendingItems = items
@@ -161,8 +171,8 @@ async function runWithCoverage(items, args) {
       ),
     )
 
-    const failedShardCount = shardResults.filter((result) => result === null).length
-    for (const result of shardResults.filter(Boolean)) {
+    const failedShardCount = shardResults.filter((result) => !hasRows(result)).length
+    for (const result of shardResults.filter(hasRows)) {
       for (const row of result.rows) {
         const item = normalizeItem(row.item, args)
         if (pendingSet.has(item) && !rowByItem.has(item)) {
@@ -200,28 +210,41 @@ async function runAudit(rows, args) {
   const sample = pickAuditSample(candidates, auditRatio)
   log(`반증 대상 ${candidates.length}개 중 ${sample.length}개 검사 (나머지 ${candidates.length - sample.length}개는 표본 밖)`)
 
-  const auditResults = await parallel(
-    chunk(sample, AUDIT_SHARD_SIZE).map((shard, index) => () =>
-      agent(renderPrompt(args.audit.prompt, '{{auditItems}}', shard.map(toAuditLine), args.root), {
-        label: `audit #${index + 1}`,
-        phase: 'Audit',
-        schema: AUDIT_SCHEMA,
-        ...investigatorOptions(args),
-      }),
-    ),
-  )
+  const auditRowByItem = new Map()
+  let pendingRows = sample
+  let failedShardCount = 0
 
-  const failedShardCount = auditResults.filter((result) => result === null).length
-  if (failedShardCount > 0) log(`반증 샤드 ${failedShardCount}개가 결과 없이 끝남`)
+  for (let round = 1; pendingRows.length > 0 && round <= args.maxRounds; round++) {
+    const pendingItems = new Set(pendingRows.map((row) => row.item))
+    const auditResults = await parallel(
+      planAuditShards(pendingRows, args).map((shard, index) => () =>
+        agent(renderPrompt(args.audit.prompt, '{{auditItems}}', shard.map(toAuditLine), args.root), {
+          label: `audit r${round} #${index + 1}`,
+          phase: 'Audit',
+          schema: AUDIT_SCHEMA,
+          ...investigatorOptions(args),
+        }),
+      ),
+    )
 
-  const itemToRow = new Map(rows.map((row) => [row.item, row]))
-  const disputed = auditResults
-    .filter(Boolean)
-    .flatMap((result) => result.rows)
-    .map((row) => ({ ...row, item: normalizeItem(row.item, args) }))
-    .filter((row) => row.refuted && itemToRow.has(row.item))
+    failedShardCount += auditResults.filter((result) => !hasRows(result)).length
+    for (const row of auditResults.filter(hasRows).flatMap((result) => result.rows)) {
+      const item = normalizeItem(row.item, args)
+      if (pendingItems.has(item) && !auditRowByItem.has(item)) auditRowByItem.set(item, { ...row, item })
+    }
 
-  return { sampledCount: sample.length, notSampledCount: candidates.length - sample.length, failedShardCount, disputed }
+    pendingRows = sample.filter((row) => !auditRowByItem.has(row.item))
+    log(`반증 round ${round}: 응답 ${auditRowByItem.size}/${sample.length}, 미검증 ${pendingRows.length}`)
+  }
+
+  return {
+    sampledCount: sample.length,
+    verifiedCount: auditRowByItem.size,
+    unverified: pendingRows.map((row) => row.item),
+    notSampledCount: candidates.length - sample.length,
+    failedShardCount,
+    disputed: [...auditRowByItem.values()].filter((row) => row.refuted),
+  }
 }
 
 function normalizeLineCounts(lineCountByItem, args) {
@@ -241,8 +264,14 @@ if (args.audit && !args.audit.prompt?.includes('{{auditItems}}')) {
 if (args.readGate && args.coverage === false) {
   throw new Error('readGate 는 rows[].item 으로 제출을 판정하므로 coverage 를 끌 수 없습니다')
 }
-if (args.readGate && args.schema && !args.schema.properties?.rows?.items?.properties?.item) {
-  throw new Error('readGate 의 hook 은 제출의 rows[].item 으로 판정합니다. schema 에 rows[].item 이 있어야 합니다')
+if (args.coverage !== false && args.schema && !args.schema.properties?.rows?.items?.properties?.item) {
+  throw new Error('coverage 는 응답의 rows[].item 으로 누락을 찾습니다. schema 에 rows[].item 이 있어야 합니다(coverage: false 면 검사하지 않음)')
+}
+if (args.audit && args.coverage === false) {
+  throw new Error('audit 는 coverage 가 모은 rows 를 표본으로 씁니다. coverage: false 와 함께 쓸 수 없습니다')
+}
+if (args.audit?.ratio !== undefined && !(args.audit.ratio > 0 && args.audit.ratio <= 1)) {
+  throw new Error('audit.ratio 는 0 보다 크고 1 이하여야 합니다. 반증하지 않으려면 audit 를 넘기지 마세요')
 }
 if (args.readGate && args.root && !isAbsolutePath(args.root)) {
   throw new Error('readGate 를 켜면 root 는 절대경로여야 합니다. hook 이 항목을 이 경로 기준으로 찾습니다')

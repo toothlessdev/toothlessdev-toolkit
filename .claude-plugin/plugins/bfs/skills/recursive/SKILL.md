@@ -1,15 +1,15 @@
 ---
 name: recursive
-description: "/fanout:recursive <순회 요청> 으로 호출하면 시작 노드에서 출발해 연결을 따라가며 새 노드가 안 나올 때까지 순회 조사합니다. 대상 목록을 미리 뽑을 수 없을 때 씁니다. 사용자가 직접 입력했을 때만 씁니다."
+description: "/bfs:recursive <순회 요청> 으로 호출하면 시작 노드에서 출발해 연결을 따라가며 새 노드가 안 나올 때까지 순회 조사합니다. 대상 목록을 미리 뽑을 수 없을 때 씁니다. 사용자가 직접 입력했을 때만 씁니다."
 argument-hint: "<어디서 출발해 무엇을 따라갈지>"
 disable-model-invocation: true
 ---
 
-# /fanout:recursive
+# /bfs:recursive
 
 - 목적: 노드를 처리해야 다음 노드가 나오는 순회형 조사를 레벨별로 돌립니다. 방문 기록, 중복 제거, 깊이와 개수 상한은 코드가 관리합니다.
 - 이 스킬 호출이 곧 Workflow 도구 사용 승인입니다.
-- 목록을 미리 뽑을 수 있으면 이 스킬이 아니라 `/fanout:run` 을 씁니다.
+- 목록을 미리 뽑을 수 있으면 이 스킬이 아니라 `/bfs:run` 을 씁니다.
 
 ## 요청
 
@@ -29,10 +29,11 @@ disable-model-invocation: true
 
 3. 상한 정하기
    - 사용자가 말하지 않았으면 `maxDepth` 5, `maxNodes` 300 으로 둡니다.
+   - 시작 노드가 depth 0 입니다. `maxDepth` 5 면 시작 노드에서 5단계 떨어진 노드까지, 레벨 6개를 처리합니다.
    - 예상 노드 수가 상한에 가까우면 실행 전에 알리고 확인합니다.
 
 4. 워크플로 실행
-   - Workflow 도구를 `name: "fanout:traverse"` 로 호출합니다.
+   - Workflow 도구를 `name: "bfs:traverse"` 로 호출합니다.
    - `args`: `{ seeds, prompt, root?, shardSize?, maxDepth?, maxNodes?, maxRounds?, criticRounds? }` 를 JSON 값으로 넘깁니다.
    - `prompt` 에는 `{{nodes}}` 자리표시자를 반드시 넣습니다. 샤드의 노드가 거기에 들어갑니다.
    - `prompt` 에 자식을 찾는 규칙을 구체적으로 적습니다. 어떤 연결을 따라가고 어떤 연결은 따라가지 않는지 적습니다.
@@ -43,4 +44,6 @@ disable-model-invocation: true
    - `truncated` 가 있으면 완료라고 말하지 않습니다. 상한(`maxDepth`, `maxNodes`)에 걸려 열지 못한 노드를 그대로 보여 줍니다.
    - `missing` 은 재투입 후에도 처리되지 못한 노드이므로 따로 보여 줍니다.
    - `criticGaps` 는 마지막 점검에서 나온 놓친 연결입니다. 어떤 시작점이 추가돼 다시 돌았는지 함께 말합니다.
+   - 점검 에이전트는 실패하면 한 라운드 안에서 `maxRounds` 번까지 다시 시도합니다. `criticFailedRounds` 는 그래도 결과를 못 낸 라운드 수입니다.
+   - `criticCompletedRounds` 가 0 이면 점검 에이전트가 한 번도 결과를 내지 못한 것입니다. 이때 `criticGaps` 가 비어 있어도 놓친 연결이 없다고 말하지 않고, `criticFailedRounds` 와 함께 점검이 되지 않았다고 밝힙니다.
    - 이 방식은 자식을 에이전트가 찾으므로, 에이전트가 연결을 보지 못한 가지는 열리지 않습니다. 결과가 확정된 전수가 아니라는 점을 보고에 한 줄로 밝힙니다.

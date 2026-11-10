@@ -16,6 +16,26 @@ const READ_SIZE_LIMIT_BYTES = 200 * 1024;
 const READ_DEFAULT_LINE_LIMIT = 2000;
 const BINARY_SNIFF_BYTES = 8000;
 const MAX_RANGES_SHOWN = 10;
+/**
+ * Read 는 아주 긴 줄을 잘라서 돌려주므로, 지금 파일과 대조할 때는 줄 앞부분만 비교합니다.
+ */
+const COMPARED_LINE_PREFIX_LENGTH = 500;
+/**
+ * Read 가 type "text" 로 돌려주지 않는 텍스트 파일입니다. 원장에 구간이 남지 않으므로
+ * 전문을 읽었는지 판정할 수 없습니다.
+ */
+const NON_TEXT_READ_EXTENSIONS = new Set([".ipynb"]);
+
+/**
+ * 워크플로는 항목을 `- 항목`, 반증 때는 `- 항목 | 앞선 결과: ...` 로 넘깁니다. 에이전트가 이
+ * 형식을 그대로 돌려줘도 workflows/bfs.js 의 normalizeItem 과 같은 항목으로 판정합니다.
+ */
+export function normalizeSubmittedItem(rawItem) {
+    return rawItem
+        .trim()
+        .replace(/^- /, "")
+        .replace(/ \| 앞선 결과: [\s\S]*$/, "");
+}
 
 export function resolveTargetPath(rawPath, cwd) {
     const absolutePath = path.resolve(cwd, rawPath.trim());
@@ -26,12 +46,38 @@ export function resolveTargetPath(rawPath, cwd) {
     }
 }
 
+function toComparableLines(text) {
+    return text
+        .split("\n")
+        .map((line) =>
+            line.replace(/\r$/, "").slice(0, COMPARED_LINE_PREFIX_LENGTH),
+        );
+}
+
+/**
+ * hook 은 Read 가 끝난 뒤에 돌기 때문에, 그 사이 파일이 바뀌면 기록하는 mtime 이 읽은
+ * 내용과 다른 버전을 가리킵니다. Read 결과 내용이 지금 파일의 같은 구간과 다르면
+ * 오래된 읽기로 보고 기록하지 않습니다. 내용이 없는 응답은 대조하지 않습니다.
+ */
+function matchesCurrentContent(file, resolvedPath) {
+    if (typeof file.content !== "string" || file.numLines <= 0) return true;
+
+    const readLines = toComparableLines(file.content).slice(0, file.numLines);
+    const currentLines = toComparableLines(
+        readFileSync(resolvedPath, "utf8"),
+    ).slice(file.startLine - 1, file.startLine - 1 + file.numLines);
+
+    return readLines.every((line, index) => line === currentLines[index]);
+}
+
 export function toReadRecord(toolResponse, cwd) {
     const file = toolResponse?.file;
     if (toolResponse?.type !== "text" || !file?.filePath) return null;
 
     const resolvedPath = resolveTargetPath(file.filePath, cwd);
     const fileStat = statSync(resolvedPath, { throwIfNoEntry: false });
+    if (fileStat?.isFile() && !matchesCurrentContent(file, resolvedPath))
+        return null;
 
     return {
         path: resolvedPath,
@@ -115,6 +161,8 @@ export function judgeItem(item, records, cwd) {
 
     if (!fileStat?.isFile())
         return { item, status: "not-file", path: resolvedPath };
+    if (NON_TEXT_READ_EXTENSIONS.has(path.extname(resolvedPath).toLowerCase()))
+        return { item, status: "not-text-read", path: resolvedPath };
     if (isBinaryFile(resolvedPath))
         return { item, status: "binary", path: resolvedPath };
 
@@ -173,6 +221,8 @@ export function describeJudgement(judgement) {
             return `${judgement.path}: 총 ${judgement.totalLines}줄 중 ${formatRanges(judgement.unreadRanges)} 줄을 읽지 않았습니다. 한 번에 limit ${judgement.suggestedLimit} 이하로 읽으세요.`;
         case "binary":
             return `${judgement.path}: 텍스트 파일이 아니라 Read 로 전문을 확인할 수 없습니다. 이 항목은 결과에서 빼세요.`;
+        case "not-text-read":
+            return `${judgement.path}: Read 가 텍스트 구간으로 돌려주지 않는 형식이라 전문을 읽었는지 판정할 수 없습니다. 이 항목은 결과에서 빼세요.`;
         case "not-file":
             return `${judgement.path}: 파일이 아니거나 존재하지 않습니다. 이 항목은 결과에서 빼세요.`;
         default:

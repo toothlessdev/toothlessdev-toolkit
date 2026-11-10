@@ -1,8 +1,8 @@
 export const meta = {
   name: 'census',
-  description: 'fanout 위에 항목별 판정(ok/issue/n/a/unknown)과 ok 반증을 얹은 전수조사 프리셋',
+  description: 'bfs 위에 항목별 판정(ok/issue/n/a/unknown)과 ok 반증을 얹은 전수조사 프리셋',
   whenToUse: '대상 목록이 확정된 전수조사. args: { items, criteria, root?, shardSize?, maxRounds?, auditRatio?, readGate?, lineCountByItem?, lineBudget? }',
-  phases: [{ title: 'Fanout', detail: 'fanout 워크플로에 판정 프롬프트와 반증 설정을 넘긴다' }],
+  phases: [{ title: 'BFS', detail: 'bfs 워크플로에 판정 프롬프트와 반증 설정을 넘긴다' }],
 }
 
 const VERDICT_SCHEMA = {
@@ -58,10 +58,10 @@ if (!args || !args.criteria) {
   throw new Error('args 에 criteria(판정 기준 문자열)가 필요합니다')
 }
 
-phase('Fanout')
+phase('BFS')
 
 // 플러그인 워크플로는 플러그인 이름 아래에 등록되므로 접두사를 붙여 부릅니다.
-const fanoutResult = await workflow('fanout:fanout', {
+const bfsResult = await workflow('bfs:bfs', {
   items: args.items,
   root: args.root,
   shardSize: args.shardSize,
@@ -78,9 +78,9 @@ const fanoutResult = await workflow('fanout:fanout', {
   },
 })
 
-const verdictCounts = fanoutResult.rows.reduce((counts, row) => {
+const verdictCounts = bfsResult.rows.reduce((counts, row) => {
   counts[row.verdict] = (counts[row.verdict] ?? 0) + 1
   return counts
 }, {})
 
-return { ...fanoutResult, verdictCounts }
+return { ...bfsResult, verdictCounts }

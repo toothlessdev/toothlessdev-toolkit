@@ -1,4 +1,4 @@
-# fanout
+# bfs
 
 조사 대상 목록은 코드로 확정하고, 에이전트에게는 항목 처리만 맡기는 Claude Code 플러그인입니다. 목록을 샤드로 나눠 병렬로 돌리고, 결과에서 빠진 항목은 다시 넣고, 판정 결과 일부를 다른 에이전트가 반증합니다.
 
@@ -18,18 +18,18 @@
     ```
 
     ```bash
-    claude plugin install fanout@toothlessdev-toolkit
+    claude plugin install bfs@toothlessdev-toolkit
     ```
 
 4. 설치 후 새 세션을 엽니다. hook 과 에이전트는 세션을 시작할 때 읽힙니다.
 
 ## 스킬
 
-| 스킬                | 하는 일                                                                         |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `/fanout:run`       | 목록을 Bash 로 뽑아 `fanout` 또는 `census` 워크플로로 처리합니다                |
-| `/fanout:recursive` | 시작 노드에서 연결을 따라가며 새 노드가 안 나올 때까지 `traverse` 로 순회합니다 |
-| `/fanout:plan`      | 막연한 요청을 질문으로 구체화한 뒤 워크플로와 인자, 예상 비용을 보여 줍니다     |
+| 스킬             | 하는 일                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `/bfs:run`       | 목록을 Bash 로 뽑아 `bfs` 또는 `census` 워크플로로 처리합니다                   |
+| `/bfs:recursive` | 시작 노드에서 연결을 따라가며 새 노드가 안 나올 때까지 `traverse` 로 순회합니다 |
+| `/bfs:plan`      | 막연한 요청을 질문으로 구체화한 뒤 워크플로와 인자, 예상 비용을 보여 줍니다     |
 
 세 스킬 모두 사용자가 직접 입력했을 때만 실행됩니다.
 
@@ -37,17 +37,17 @@
 
 | 워크플로   | 쓰는 경우                                               | 주요 `args`                                 |
 | ---------- | ------------------------------------------------------- | ------------------------------------------- |
-| `fanout`   | 목록이 확정된 일반 병렬 작업                            | `items`, `prompt`(`{{items}}` 포함), `root` |
+| `bfs`      | 목록이 확정된 일반 병렬 작업                            | `items`, `prompt`(`{{items}}` 포함), `root` |
 | `census`   | 항목마다 기준 충족 여부(ok, issue, n/a, unknown)를 판정 | `items`, `criteria`, `root`                 |
 | `traverse` | 목록을 미리 못 뽑고 연결을 따라가야 하는 조사           | `seeds`, `prompt`(`{{nodes}}` 포함), `root` |
 
 ## Read 게이트
 
-에이전트가 파일을 `sed`, `grep` 으로 일부만 보고 판정하는 걸 막는 기능입니다. `fanout`, `census` 에 `readGate: true` 를 넘기면 켜집니다.
+에이전트가 파일을 `sed`, `grep` 으로 일부만 보고 판정하는 걸 막는 기능입니다. `bfs`, `census` 에 `readGate: true` 를 넘기면 켜집니다.
 
 ### 동작
 
-1. 조사 에이전트가 `fanout:investigator` 로 바뀝니다. 이 에이전트는 Bash 없이 Read, Glob, Grep 만 씁니다.
+1. 조사 에이전트가 `bfs:investigator` 로 바뀝니다. 이 에이전트는 Bash 없이 Read, Glob, Grep 만 씁니다.
 2. 에이전트가 Read 를 할 때마다 hook 이 그 결과의 시작 줄, 읽은 줄 수, 전체 줄 수, 파일 수정 시각을 원장(에이전트별 JSONL 파일)에 남깁니다.
 3. 에이전트가 결과를 제출하면 hook 이 결과의 `rows[].item` 마다 원장을 보고 1번 줄부터 마지막 줄까지 다 읽었는지 계산합니다.
 4. 다 읽지 않은 파일이 있으면 제출을 거부하고, 파일별로 읽지 않은 줄 구간을 거부 사유로 돌려줍니다. 에이전트는 그 구간을 읽고 다시 제출합니다.
@@ -62,17 +62,17 @@
 | `readGate`        | false  | 켜면 `coverage` 를 끌 수 없습니다                                          |
 | `root`            | 없음   | `readGate` 를 켜면 절대경로여야 합니다. 상대경로 항목은 이 기준으로 풉니다 |
 | `lineCountByItem` | 없음   | `{ 항목: 줄 수 }`. 넘기면 샤드를 줄 수 합으로 나눕니다                     |
-| `lineBudget`      | 3000   | `lineCountByItem` 을 넘겼을 때 샤드 하나의 줄 수 상한                      |
+| `lineBudget`      | 3000   | `lineCountByItem` 을 넘겼을 때 샤드 하나의 줄 수 상한. 반증 샤드에도 적용 |
 
 `readGate` 를 켜면 결과의 `item` 은 절대경로로 돌아옵니다.
 
 ### 목록에서 빼야 하는 것
 
-게이트는 일반 텍스트 파일만 판정할 수 있습니다. 바이너리, 디렉터리, 없는 경로가 항목에 있으면 그 항목은 제출이 거부됩니다. `/fanout:run` 은 아래처럼 목록을 만들 때 미리 걸러 냅니다.
+게이트는 일반 텍스트 파일만 판정할 수 있습니다. 바이너리, 디렉터리, 없는 경로, `.ipynb` 처럼 Read 가 텍스트 구간으로 돌려주지 않는 파일이 항목에 있으면 그 항목은 제출이 거부됩니다. `/bfs:run` 은 아래처럼 목록을 만들 때 미리 걸러 냅니다.
 
 ```bash
 git ls-files -- '<pathspec>' | while IFS= read -r f; do
-  if [ -f "$f" ] && { [ ! -s "$f" ] || grep -Iq . "$f"; }; then printf '%s\t%s\n' "$f" "$(wc -l < "$f" | tr -d ' ')"; fi
+  if [ -f "$f" ] && [ "${f##*.}" != ipynb ] && { [ ! -s "$f" ] || grep -Iq . "$f"; }; then printf '%s\t%s\n' "$f" "$(wc -l < "$f" | tr -d ' ')"; fi
 done
 ```
 
@@ -83,27 +83,26 @@ Claude Code 는 hook 이 0 이나 2 가 아닌 코드로 끝나면 막지 않는
 - 제출 판정 중 예외가 나면(원장 파일 손상 등) 제출을 거부합니다.
 - `rows` 배열이 없는 investigator 제출은 판정할 수 없으므로 거부합니다.
 - hook 입력 JSON 을 해석하지 못하면, 원문에 investigator 의 제출 흔적이 있을 때만 거부합니다. 다른 에이전트의 호출은 막지 않습니다.
-- Read 기록에 실패하면 그 구간은 원장에 없으므로 제출 때 읽지 않은 구간으로 판정됩니다.
+- Read 기록에 실패하면 Read 는 막지 않고 원인을 stderr 에 남깁니다. 그 구간은 원장에 없으므로 제출 때 읽지 않은 구간으로 판정됩니다.
 - 거부가 계속되면 에이전트는 결과 없이 끝나고, 그 항목은 재투입되거나 `missing` 으로 남습니다.
 
 ### 보장하지 않는 것
 
 - 읽은 줄을 제대로 이해하고 판정했는지는 보장하지 않습니다. 판정의 정확도는 `census` 의 반증이 따로 봅니다.
 - 원장은 에이전트별입니다. 재투입된 에이전트는 이전 에이전트가 읽은 구간을 물려받지 않고 처음부터 다시 읽습니다.
-- 조사 중 파일이 바뀌면 바뀌기 전에 읽은 구간은 세지 않습니다.
+- 조사 중 파일이 바뀌면 바뀌기 전에 읽은 구간은 세지 않습니다. Read 가 끝나고 hook 이 기록하기 전에 바뀐 경우도 Read 결과 내용을 지금 파일과 대조해 기록하지 않습니다. 줄이 아주 길면 앞 500자만 대조합니다.
 - `traverse` 에는 아직 Read 게이트가 없습니다.
 
 ### 원장 위치
 
-`$CLAUDE_PLUGIN_DATA/read-ledger/<세션 ID>/<에이전트 ID>.jsonl` 에 쌓이고, 에이전트가 끝나면(SubagentStop) 지워집니다. `CLAUDE_PLUGIN_DATA` 가 없으면 OS 임시 디렉터리 아래 `fanout-plugin-data` 를 씁니다.
+`$CLAUDE_PLUGIN_DATA/read-ledger/<세션 ID>/<에이전트 ID>.jsonl` 에 쌓이고, 에이전트가 끝나면(SubagentStop) 지워집니다. `CLAUDE_PLUGIN_DATA` 가 없으면 OS 임시 디렉터리 아래 `bfs-plugin-data` 를 씁니다.
 
-hook 은 모든 세션의 Read 와 결과 제출에 실행되지만, `fanout:investigator` 가 아닌 호출은 입력만 읽고 바로 끝납니다.
+hook 은 모든 세션의 Read 와 결과 제출에 실행되지만, `bfs:investigator` 가 아닌 호출은 입력만 읽고 바로 끝납니다.
 
 ## 테스트
 
-판정 로직과 hook 스크립트의 테스트는 Node 내장 테스트 러너로 돌립니다. 추가 설치는 필요 없습니다.
+Read 게이트 판정 로직, hook 스크립트, 워크플로의 반증 · critic 집계 테스트는 Node 내장 테스트 러너로 돌립니다. 추가 설치는 필요 없습니다.
 
 ```bash
-node --test .claude-plugin/plugins/fanout/scripts/read-gate.test.mjs
+node --test .claude-plugin/plugins/bfs/scripts/*.test.mjs
 ```
-

@@ -1,15 +1,15 @@
 ---
 name: plan
-description: "/fanout:plan <막연한 조사 요청> 으로 호출하면 요청을 명확히 한 뒤 fanout, census, traverse 중 맞는 워크플로와 인자, 예상 비용을 계획서로 보여 주고 승인받아 실행합니다. 사용자가 직접 입력했을 때만 씁니다."
+description: "/bfs:plan <막연한 조사 요청> 으로 호출하면 요청을 명확히 한 뒤 bfs, census, traverse 중 맞는 워크플로와 인자, 예상 비용을 계획서로 보여 주고 승인받아 실행합니다. 사용자가 직접 입력했을 때만 씁니다."
 argument-hint: "<조사하고 싶은 것>"
 disable-model-invocation: true
 ---
 
-# /fanout:plan
+# /bfs:plan
 
 - 목적: 무엇을 어떻게 조사해야 할지 막연할 때, 질문으로 요청을 구체화하고 워크플로 선택과 비용 확인까지 거쳐 실행합니다.
-- 이 스킬 호출이 곧 Workflow 도구 사용 승인입니다. 다른 fanout 스킬은 부르지 않고 워크플로를 직접 호출합니다.
-- 대상이 이미 분명하면 `/fanout:run`, `/fanout:recursive` 가 더 빠릅니다.
+- 이 스킬 호출이 곧 Workflow 도구 사용 승인입니다. 다른 bfs 스킬은 부르지 않고 워크플로를 직접 호출합니다.
+- 대상이 이미 분명하면 `/bfs:run`, `/bfs:recursive` 가 더 빠릅니다.
 
 ## 요청
 
@@ -25,7 +25,7 @@ disable-model-invocation: true
      - "빠짐없이"의 기준이 무엇입니까 (모집단 전부, 새 노드가 안 나올 때까지, 표본 반증 등)
      - 판정 기준이 구체적입니까. "문제가 있는지" 는 부족하고 "이 규칙을 어기는지" 여야 합니다.
      - 읽기만 합니까, 파일을 고칩니까. 고치는 작업이면 이 워크플로들은 읽기 전용에 맞춰져 있다고 알리고 방식을 따로 정합니다.
-     - 항목이 파일이고 에이전트가 파일 전문을 읽어야 합니까 (그렇다면 `readGate`, 목록 만드는 법은 `/fanout:run` 의 모집단 확정 절차를 따릅니다)
+     - 항목이 파일이고 에이전트가 파일 전문을 읽어야 합니까 (그렇다면 `readGate`, 목록 만드는 법은 `/bfs:run` 의 모집단 확정 절차를 따릅니다)
 
 2. 대상 확정
    - 목록형이면 Bash 로 목록을 뽑아 건수와 명령을 기록합니다. 순회형이면 시작 노드를 뽑습니다.
@@ -34,15 +34,15 @@ disable-model-invocation: true
    - 선택한 워크플로와 이유
    - `args` 전체 (프롬프트 원문 포함)
    - 예상 에이전트 수와 계산식
-     - `fanout`, `census`: 항목 수 ÷ `shardSize` 가 한 라운드의 샤드 수입니다. 최대 `maxRounds` 만큼 곱하고, 반증은 표본 수 ÷ 10 을 더합니다.
+     - `bfs`, `census`: 항목 수 ÷ `shardSize` 가 한 라운드의 샤드 수입니다. 최대 `maxRounds` 만큼 곱하고, 반증은 표본 수 ÷ 10 에 최대 `maxRounds` 를 곱해 더합니다(응답이 빠진 표본만 다시 넣습니다).
      - `lineCountByItem` 을 넘기면 한 라운드의 샤드 수는 줄 수 합 ÷ `lineBudget` 이상입니다. 혼자 예산을 넘는 파일은 샤드 하나를 차지합니다.
-     - `traverse`: 노드 수 ÷ `shardSize` 에 레벨 수의 재투입 여지를 더하고, 점검 에이전트 1개를 더합니다. 상한은 `maxNodes` 로 정해집니다.
+     - `traverse`: 노드 수 ÷ `shardSize` 에 레벨 수의 재투입 여지를 더하고, 점검 에이전트를 `criticRounds` 개(실패 시 라운드마다 최대 `maxRounds` 번) 더합니다. 상한은 `maxNodes` 로 정해집니다.
    - 이 방식이 보장하지 못하는 것 한 줄
    - 사용자의 승인을 받기 전에는 실행하지 않습니다.
 
 4. 승인 후 실행
-   - 승인받은 `args` 로 Workflow 도구를 `name: "fanout:<워크플로>"` 로 호출합니다. `args` 는 JSON 값으로 넘깁니다.
-   - `fanout`: `{ items, prompt, ... }`, 프롬프트에는 `{{items}}` 가 들어갑니다.
+   - 승인받은 `args` 로 Workflow 도구를 `name: "bfs:<워크플로>"` 로 호출합니다. `args` 는 JSON 값으로 넘깁니다.
+   - `bfs`: `{ items, prompt, ... }`, 프롬프트에는 `{{items}}` 가 들어갑니다.
    - `census`: `{ items, criteria, ... }`
    - `traverse`: `{ seeds, prompt, ... }`, 프롬프트에는 `{{nodes}}` 가 들어갑니다.
 
@@ -50,3 +50,4 @@ disable-model-invocation: true
    - 누락과 상한 도달을 먼저 말합니다. `missing` 이나 `truncated` 가 비어 있지 않으면 완료라고 말하지 않습니다.
    - `census` 는 `verdictCounts` 와 `audit.disputed` 를, `traverse` 는 `criticGaps` 를 따로 보여 줍니다.
    - 반증이 표본만 봤다면 보지 않은 개수를 함께 밝힙니다.
+   - `audit.unverified` 가 비어 있지 않거나 `traverse` 의 `criticCompletedRounds` 가 0 이면 검증이 끝났다고 말하지 않습니다.

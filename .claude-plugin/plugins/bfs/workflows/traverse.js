@@ -115,7 +115,7 @@ async function processLevel(frontier, depth, state) {
       ),
     )
 
-    for (const result of shardResults.filter(Boolean)) {
+    for (const result of shardResults.filter((result) => Array.isArray(result?.rows))) {
       for (const row of result.rows) {
         const node = normalizeNode(row.node, state.root)
         if (pendingSet.has(node) && !state.visited.has(node)) {
@@ -177,7 +177,7 @@ if (!args.prompt.includes('{{nodes}}')) {
 
 const state = {
   prompt: args.prompt,
-  root: args.root,
+  root: args.root?.replace(/\/+$/, ''),
   shardSize: args.shardSize ?? DEFAULT_SHARD_SIZE,
   maxDepth: args.maxDepth ?? DEFAULT_MAX_DEPTH,
   maxNodes: args.maxNodes ?? DEFAULT_MAX_NODES,
@@ -193,6 +193,26 @@ const firstPass = await exploreFrom(args.seeds, state)
 const missing = [...firstPass.missing]
 const truncated = [...firstPass.truncated]
 const gaps = []
+let criticFailedRounds = 0
+let criticCompletedRounds = 0
+
+/**
+ * 기본 criticRounds 는 1 이라, 실패를 다음 라운드로 넘기면 재시도 기회가 없습니다.
+ * 그래서 한 라운드 안에서 maxRounds 번까지 다시 시도하고, 모두 실패해야 실패 라운드로 셉니다.
+ */
+async function critiqueWithRetry(round, visitedNodes) {
+  for (let attempt = 1; attempt <= state.maxRounds; attempt++) {
+    const critique = await agent(buildCriticPrompt(state.prompt, visitedNodes), {
+      label: `critic #${round} a${attempt}`,
+      phase: 'Critic',
+      schema: CRITIC_SCHEMA,
+    })
+    if (Array.isArray(critique?.gaps)) return critique
+    log(`critic #${round} 시도 ${attempt} 이 결과 없이 끝남`)
+  }
+
+  return null
+}
 
 phase('Critic')
 for (let round = 1; round <= criticRounds; round++) {
@@ -201,12 +221,14 @@ for (let round = 1; round <= criticRounds; round++) {
     log(`critic 입력은 방문 노드 ${visitedNodes.length}개 중 앞 ${CRITIC_VISITED_LIMIT}개만 전달`)
   }
 
-  const critique = await agent(buildCriticPrompt(state.prompt, visitedNodes.slice(0, CRITIC_VISITED_LIMIT)), {
-    label: `critic #${round}`,
-    phase: 'Critic',
-    schema: CRITIC_SCHEMA,
-  })
-  if (!critique || critique.gaps.length === 0) break
+  const critique = await critiqueWithRetry(round, visitedNodes.slice(0, CRITIC_VISITED_LIMIT))
+  if (!critique) {
+    criticFailedRounds++
+    continue
+  }
+
+  criticCompletedRounds++
+  if (critique.gaps.length === 0) break
 
   gaps.push(...critique.gaps)
   const newSeeds = critique.gaps.flatMap((gap) => gap.newSeeds)
@@ -221,5 +243,7 @@ return {
   missing,
   truncated,
   criticGaps: gaps,
+  criticCompletedRounds,
+  criticFailedRounds,
   rows: [...state.visited.values()],
 }

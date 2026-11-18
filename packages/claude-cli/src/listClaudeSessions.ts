@@ -20,6 +20,20 @@ export interface ClaudeSession {
     readonly pid?: number;
     /** claude 가 보고하는 진행 상태입니다. 예: working, blocked, done */
     readonly state?: string;
+    /**
+     * -p 로 실행한 세션입니다. claude agents 목록에 나오지 않아서 호출부가 따로 기록해 둔 것을 합칩니다.
+     * 프로세스가 남지 않으므로 메시지는 받지 못하고 --resume 으로만 이어 갑니다.
+     */
+    readonly isPrint?: boolean;
+    /**
+     * Remote Control 로 연결된 세션의 ID 입니다(cse_ 로 시작). 프로세스가 살아 있는 동안
+     * 다른 곳에서는 이 ID 의 claude.ai/code 주소로만 세션을 열 수 있습니다.
+     */
+    readonly remoteControlSessionId?: string;
+    /** 세션이 사람에게 묻고 기다리는 내용입니다. state 가 blocked 일 때 claude 가 채웁니다. */
+    readonly needs?: string;
+    /** claude 가 남긴 지금 진행 상황 한 줄입니다. 외부 메시지를 담을 수 있으니 데이터로만 다룹니다. */
+    readonly detail?: string;
 }
 
 interface ClaudeAgentEntry {
@@ -66,29 +80,42 @@ export async function listClaudeSessions({
     );
 
     return Promise.all(
-        sessions.map(async (entry) => ({
-            sessionId: entry.sessionId,
-            backgroundId: entry.id ?? "",
-            name: entry.name ?? "",
-            intent: await readIntent(jobsDirectory, entry.id),
-            workingDirectory: entry.cwd ?? "",
-            isBackground: entry.kind === "background",
-            startedAtMs: entry.startedAt ?? 0,
-            pid: entry.pid,
-            state: entry.state,
-        })),
+        sessions.map(async (entry) => {
+            const jobState = await readJobState(jobsDirectory, entry.id);
+
+            return {
+                sessionId: entry.sessionId,
+                backgroundId: entry.id ?? "",
+                name: entry.name ?? "",
+                workingDirectory: entry.cwd ?? "",
+                isBackground: entry.kind === "background",
+                startedAtMs: entry.startedAt ?? 0,
+                pid: entry.pid,
+                state: entry.state,
+                ...jobState,
+            };
+        }),
     );
 }
 
+type JobState = Pick<
+    ClaudeSession,
+    "intent" | "remoteControlSessionId" | "needs" | "detail"
+>;
+
+function nonEmptyString(value: unknown): string | undefined {
+    return typeof value === "string" && value !== "" ? value : undefined;
+}
+
 /**
- * 시작 프롬프트는 claude 내부 파일에만 있습니다. 공개된 형식이 아니라서
- * 읽지 못해도 실패하지 않고 세션 이름만으로 매칭합니다.
+ * 시작 프롬프트, Remote Control 세션 ID, 진행 상황은 claude 내부 파일에만 있습니다. 공개된 형식이 아니라서
+ * 읽지 못해도 실패하지 않습니다. 매칭은 세션 이름만으로 하고, 알림 버튼은 로컬 세션을 엽니다.
  */
-async function readIntent(
+async function readJobState(
     jobsDirectory: string,
     backgroundId: string | undefined,
-): Promise<string> {
-    if (!backgroundId) return "";
+): Promise<JobState> {
+    if (!backgroundId) return { intent: "" };
 
     try {
         const state = JSON.parse(
@@ -96,10 +123,28 @@ async function readIntent(
                 path.join(jobsDirectory, backgroundId, "state.json"),
                 "utf8",
             ),
-        ) as { intent?: unknown };
+        ) as {
+            intent?: unknown;
+            bridgeSessionId?: unknown;
+            needs?: unknown;
+            detail?: unknown;
+        };
 
-        return typeof state.intent === "string" ? state.intent : "";
+        const optionalFields = {
+            remoteControlSessionId: nonEmptyString(state.bridgeSessionId),
+            needs: nonEmptyString(state.needs),
+            detail: nonEmptyString(state.detail),
+        };
+
+        return {
+            intent: nonEmptyString(state.intent) ?? "",
+            ...Object.fromEntries(
+                Object.entries(optionalFields).filter(
+                    ([, value]) => value !== undefined,
+                ),
+            ),
+        };
     } catch {
-        return "";
+        return { intent: "" };
     }
 }

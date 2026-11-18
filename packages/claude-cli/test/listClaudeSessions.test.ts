@@ -32,7 +32,12 @@ describe("listClaudeSessions", () => {
         mkdirSync(path.join(jobsDirectory, "b1"), { recursive: true });
         writeFileSync(
             path.join(jobsDirectory, "b1", "state.json"),
-            JSON.stringify({ intent: "시작 프롬프트" }),
+            JSON.stringify({
+                intent: "시작 프롬프트",
+                bridgeSessionId: "cse_remote1",
+                needs: "범위를 정해 주세요",
+                detail: "",
+            }),
         );
         const entries = [
             {
@@ -74,6 +79,8 @@ describe("listClaudeSessions", () => {
                 isBackground: true,
                 startedAtMs: 5,
                 pid: 42,
+                remoteControlSessionId: "cse_remote1",
+                needs: "범위를 정해 주세요",
             },
             {
                 sessionId: "s2",

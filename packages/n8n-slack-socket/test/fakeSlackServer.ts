@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { WebSocket, WebSocketServer } from "ws";
@@ -13,16 +13,29 @@ interface Envelope {
 export class FakeSlackServer {
     connectionOpenError: string | null = null;
     connectionCount = 0;
+    openConnectionCount = 0;
     readonly acknowledgedEnvelopeIds: string[] = [];
 
     private readonly webSocketServer = new WebSocketServer({ noServer: true });
     private readonly httpServer: Server;
     private socket: WebSocket | null = null;
+    private isHoldingConnectionOpen = false;
+    private readonly heldConnectionOpens: Array<{
+        readonly requestUrl: string | undefined;
+        readonly response: ServerResponse;
+    }> = [];
 
     constructor() {
         this.httpServer = createServer((request, response) => {
-            response.setHeader("content-type", "application/json");
-            response.end(JSON.stringify(this.openConnection(request.url)));
+            if (this.isHoldingConnectionOpen) {
+                this.heldConnectionOpens.push({
+                    requestUrl: request.url,
+                    response,
+                });
+                return;
+            }
+
+            this.respondToConnectionOpen(request.url, response);
         });
 
         this.httpServer.on("upgrade", (request, socket, head) => {
@@ -73,6 +86,24 @@ export class FakeSlackServer {
         return this.sendEnvelope({ type: "interactive", payload });
     }
 
+    /** 네트워크가 끊긴 것처럼 apps.connections.open 에 응답하지 않고 붙잡아 둡니다. */
+    holdConnectionOpen(): void {
+        this.isHoldingConnectionOpen = true;
+    }
+
+    releaseConnectionOpen(): void {
+        this.isHoldingConnectionOpen = false;
+        for (const { requestUrl, response } of this.heldConnectionOpens.splice(
+            0,
+        )) {
+            this.respondToConnectionOpen(requestUrl, response);
+        }
+    }
+
+    get heldConnectionOpenCount(): number {
+        return this.heldConnectionOpens.length;
+    }
+
     /** Slack 이 연결을 교체할 때 보내는 메시지입니다. 클라이언트는 다시 연결해야 합니다. */
     requestReconnect(): void {
         this.socket?.send(
@@ -82,6 +113,14 @@ export class FakeSlackServer {
 
     private get port(): number {
         return (this.httpServer.address() as AddressInfo).port;
+    }
+
+    private respondToConnectionOpen(
+        requestUrl: string | undefined,
+        response: ServerResponse,
+    ): void {
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify(this.openConnection(requestUrl)));
     }
 
     private openConnection(requestUrl: string | undefined) {
@@ -98,7 +137,11 @@ export class FakeSlackServer {
     private accept(client: WebSocket): void {
         this.socket = client;
         this.connectionCount += 1;
+        this.openConnectionCount += 1;
 
+        client.on("close", () => {
+            this.openConnectionCount -= 1;
+        });
         client.on("message", (data) => {
             const { envelope_id: envelopeId } = JSON.parse(data.toString());
             if (envelopeId) this.acknowledgedEnvelopeIds.push(envelopeId);

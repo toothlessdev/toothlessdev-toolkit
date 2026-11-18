@@ -223,6 +223,10 @@ export class SlackSocketTrigger implements INodeType {
             slackApiUrl: process.env.N8N_SLACK_SOCKET_API_URL,
             source: readSource(this),
             ownerId: this.getWorkflow().id ?? "unsaved-workflow",
+            activationKey:
+                this.getMode() === "trigger"
+                    ? `${this.getWorkflow().id}:${this.getNode().id}`
+                    : undefined,
             onEvent: (envelope) => {
                 this.emit([
                     this.helpers.returnJsonArray([
@@ -264,6 +268,10 @@ export class SlackSocketTrigger implements INodeType {
             // 가짜 Slack 서버로 알림 경로를 검증할 때만 씁니다.
             silenceTimeoutMs:
                 Number(process.env.N8N_SLACK_SOCKET_SILENCE_TIMEOUT_MS) ||
+                undefined,
+            // 가짜 Slack 서버로 연결이 늦는 경우를 검증할 때만 씁니다.
+            connectWaitMs:
+                Number(process.env.N8N_SLACK_SOCKET_CONNECT_WAIT_MS) ||
                 undefined,
         });
 

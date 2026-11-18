@@ -48,6 +48,7 @@ function createTriggerFunctions(
         getNodeParameter: (name: string, fallback?: string) =>
             parameters[name] ?? fallback,
         getWorkflow: () => ({ id: "workflow-1" }),
+        getMode: () => "manual",
         emit: emitToWorkflow,
         helpers: {
             returnJsonArray: (items: object[]) =>

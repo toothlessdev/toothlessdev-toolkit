@@ -3,6 +3,7 @@ import { LogLevel, SocketModeClient } from "@slack/socket-mode";
 import { SlackEventSilenceMonitor } from "./SlackEventSilenceMonitor";
 import type { SlackEvent, SlackSourceKind } from "./slackEventFilter";
 import type { SlackMessageShortcut } from "./slackMessageShortcut";
+import { waitAtMost } from "./waitAtMost";
 
 export interface SlackEventEnvelope {
     readonly event_id: string;
@@ -39,20 +40,40 @@ const DEFAULT_RECONNECT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_SILENCE_TIMEOUT_MS = 15 * 60 * 1000;
 const DEFAULT_SILENCE_REPEAT_INTERVAL_MS = 60 * 60 * 1000;
 
+/**
+ * WebClient 기본값은 네트워크 오류를 30분 동안 재시도한 뒤 포기하고, socket-mode 는 그 오류를
+ * 복구할 수 없다고 보고 재연결을 멈춥니다. 연결은 네트워크가 돌아올 때까지 계속 시도해야 하므로
+ * 무한 재시도로 바꿉니다. 응답 없는 요청 하나에 재시도가 묶이지 않게 요청마다 타임아웃을 둡니다.
+ */
+const SLACK_API_RETRY_CONFIG = {
+    forever: true,
+    maxTimeout: 30_000,
+    unref: true,
+};
+const SLACK_API_REQUEST_TIMEOUT_MS = 30_000;
+
+/** n8n 은 closeFunction 이 끝나야 트리거를 다시 등록하므로 연결 정리가 늦어도 닫기는 이 시간 안에 끝냅니다. */
+const DISCONNECT_WAIT_MS = 5_000;
+
 export class SlackSocketConnection {
     private readonly client: SocketModeClient;
     private readonly rememberedEventIds = new Set<string>();
     private readonly silenceMonitor: SlackEventSilenceMonitor;
     private reconnectTimer: NodeJS.Timeout | undefined;
     private appId: string | undefined;
+    private isStopped = false;
 
     constructor(private readonly options: SlackSocketConnectionOptions) {
         this.client = new SocketModeClient({
             appToken: options.appToken,
             logLevel: LogLevel.WARN,
-            clientOptions: options.slackApiUrl
-                ? { slackApiUrl: options.slackApiUrl }
-                : undefined,
+            clientOptions: {
+                ...(options.slackApiUrl
+                    ? { slackApiUrl: options.slackApiUrl }
+                    : {}),
+                retryConfig: SLACK_API_RETRY_CONFIG,
+                timeout: SLACK_API_REQUEST_TIMEOUT_MS,
+            },
         });
 
         this.silenceMonitor = new SlackEventSilenceMonitor({
@@ -85,6 +106,11 @@ export class SlackSocketConnection {
             this.startReconnectTimer();
         });
         this.client.on("connected", () => {
+            if (this.isStopped) {
+                this.closeLateConnection();
+                return;
+            }
+
             this.clearReconnectTimer();
             this.silenceMonitor.start();
         });
@@ -95,10 +121,21 @@ export class SlackSocketConnection {
     }
 
     async stop(): Promise<void> {
+        this.isStopped = true;
         this.clearReconnectTimer();
         this.silenceMonitor.stop();
 
-        await this.client.disconnect();
+        await waitAtMost(this.client.disconnect(), DISCONNECT_WAIT_MS);
+    }
+
+    /**
+     * socket-mode 는 닫힌 뒤에도 진행 중이던 연결 요청이 성공하면 연결을 엽니다. Slack 은 앱의 연결들에
+     * 이벤트를 나눠 보내므로, 구독자 없는 연결이 남으면 그쪽으로 간 이벤트가 사라집니다.
+     */
+    private closeLateConnection(): void {
+        this.client
+            .disconnect()
+            .catch((error: Error) => this.options.onError(error));
     }
 
     /**

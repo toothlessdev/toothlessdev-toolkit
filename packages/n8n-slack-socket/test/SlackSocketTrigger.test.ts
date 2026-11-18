@@ -40,19 +40,34 @@ const grafanaAlert = {
 
 let server: FakeSlackServer;
 let emit: ReturnType<typeof vi.fn>;
+let emitError: ReturnType<typeof vi.fn>;
 let logError: ReturnType<typeof vi.fn>;
 let responses: ITriggerResponse[];
+
+let activationCount = 0;
+
+interface ActivationOptions {
+    readonly nodeId?: string;
+    readonly mode?: "trigger" | "manual";
+}
 
 function createTriggerFunctions(
     parameters: Record<string, string>,
     emitToWorkflow: typeof emit,
+    { nodeId, mode = "trigger" }: ActivationOptions = {},
 ) {
+    activationCount += 1;
+    const resolvedNodeId = nodeId ?? `node-${activationCount}`;
+
     return {
         getCredentials: async () => ({ appToken: "xapp-test" }),
         getNodeParameter: (name: string, fallback?: string) =>
             parameters[name] ?? fallback,
         getWorkflow: () => ({ id: "workflow-1" }),
+        getNode: () => ({ id: resolvedNodeId }),
+        getMode: () => mode,
         emit: emitToWorkflow,
+        emitError,
         helpers: {
             returnJsonArray: (items: object[]) =>
                 items.map((json) => ({ json })),
@@ -61,9 +76,13 @@ function createTriggerFunctions(
     } as unknown as ITriggerFunctions;
 }
 
-async function activate(parameters = defaultParameters, emitTo = emit) {
+async function activate(
+    parameters = defaultParameters,
+    emitTo = emit,
+    options?: ActivationOptions,
+) {
     const response = await new SlackSocketTrigger().trigger.call(
-        createTriggerFunctions(parameters, emitTo),
+        createTriggerFunctions(parameters, emitTo, options),
     );
     responses.push(response);
 
@@ -80,6 +99,7 @@ beforeEach(async () => {
     vi.stubEnv("N8N_SLACK_SOCKET_API_URL", server.apiUrl);
 
     emit = vi.fn();
+    emitError = vi.fn();
     logError = vi.fn();
     responses = [];
 });
@@ -337,6 +357,53 @@ describe("SlackSocketTrigger", () => {
         await expect(activate()).rejects.toThrow("invalid_auth");
     });
 
+    describe("연결이 늦을 때", () => {
+        beforeEach(() => {
+            vi.stubEnv("N8N_SLACK_SOCKET_CONNECT_WAIT_MS", "100");
+            server.holdConnectionOpen();
+        });
+
+        test("연결을 기다리지 않고 활성화하고, 연결되면 이벤트를 받는다", async () => {
+            await activate();
+            expect(server.connectionCount).toBe(0);
+
+            server.releaseConnectionOpen();
+            await vi.waitFor(() => expect(server.connectionCount).toBe(1));
+            server.sendEvent("EvLate", mention);
+
+            await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+        });
+
+        test("연결 전에 닫아도 바로 닫히고, 나중에 연결돼도 연결을 남기지 않는다", async () => {
+            const response = await activate();
+            await vi.waitFor(() =>
+                expect(server.heldConnectionOpenCount).toBe(1),
+            );
+            await response.closeFunction?.();
+            responses = [];
+
+            server.releaseConnectionOpen();
+
+            await vi.waitFor(() => expect(server.connectionCount).toBe(1));
+            await vi.waitFor(() => expect(server.openConnectionCount).toBe(0));
+        });
+
+        test("활성화 뒤에 연결이 실패하면 워크플로에 알린다", async () => {
+            await activate();
+            await vi.waitFor(() =>
+                expect(server.heldConnectionOpenCount).toBe(1),
+            );
+
+            server.connectionOpenError = "invalid_auth";
+            server.releaseConnectionOpen();
+
+            await vi.waitFor(() => expect(emitError).toHaveBeenCalledOnce());
+            expect(emitError.mock.calls[0][0].message).toContain(
+                "invalid_auth",
+            );
+        });
+    });
+
     test("닫으면 재연결하지 않고 이벤트를 받지 않는다", async () => {
         const response = await activate();
         await response.closeFunction?.();
@@ -396,6 +463,51 @@ describe("SlackSocketTrigger", () => {
             await activate(defaultParameters, emitToTestRun);
 
             server.sendEvent("EvShared", mention);
+
+            await vi.waitFor(() => {
+                expect(emit).toHaveBeenCalledOnce();
+                expect(emitToTestRun).toHaveBeenCalledOnce();
+            });
+        });
+
+        test("같은 노드를 다시 활성화하면 새 구독만 받는다", async () => {
+            const emitToReactivated = vi.fn();
+            const options = { nodeId: "node-same" };
+            await activate(defaultParameters, emit, options);
+            await activate(defaultParameters, emitToReactivated, options);
+
+            server.sendEvent("EvReactivated", mention);
+
+            await vi.waitFor(() =>
+                expect(emitToReactivated).toHaveBeenCalledOnce(),
+            );
+            expect(emit).not.toHaveBeenCalled();
+        });
+
+        test("교체된 구독을 닫아도 새 구독은 계속 받는다", async () => {
+            const emitToReactivated = vi.fn();
+            const options = { nodeId: "node-same" };
+            const replaced = await activate(defaultParameters, emit, options);
+            await activate(defaultParameters, emitToReactivated, options);
+
+            await replaced.closeFunction?.();
+            server.sendEvent("EvAfterReplacedClose", mention);
+
+            await vi.waitFor(() =>
+                expect(emitToReactivated).toHaveBeenCalledOnce(),
+            );
+            expect(server.connectionCount).toBe(1);
+        });
+
+        test("편집기 테스트 실행은 같은 노드의 운영 구독을 대체하지 않는다", async () => {
+            const emitToTestRun = vi.fn();
+            await activate(defaultParameters, emit, { nodeId: "node-same" });
+            await activate(defaultParameters, emitToTestRun, {
+                nodeId: "node-same",
+                mode: "manual",
+            });
+
+            server.sendEvent("EvBothModes", mention);
 
             await vi.waitFor(() => {
                 expect(emit).toHaveBeenCalledOnce();

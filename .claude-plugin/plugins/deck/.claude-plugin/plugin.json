@@ -1,0 +1,10 @@
+{
+  "name": "deck",
+  "description": "발표 장표를 모핑 스토리보드부터 Canvas 애니메이션 구현, 내용 검사까지 HTML 슬라이드로 만드는 스킬 묶음",
+  "version": "0.1.0",
+  "author": {
+    "name": "toothlessdev",
+    "url": "https://github.com/toothlessdev"
+  },
+  "license": "MIT"
+}

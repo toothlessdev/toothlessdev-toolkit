@@ -155,6 +155,15 @@ export class ClaudeCli implements INodeType {
                 description: "이어갈 세션의 UUID. 비우면 새 세션을 시작합니다.",
             },
             {
+                displayName: "Session ID",
+                name: "sessionId",
+                type: "string",
+                default: "",
+                description:
+                    "새 세션에 줄 UUID. 실행 전에 알림이나 대화 연결을 먼저 만들 때 씁니다. 비우면 claude 가 정합니다.",
+                displayOptions: { show: { executionMode: ["print"] } },
+            },
+            {
                 displayName: "Options",
                 name: "options",
                 type: "collection",
@@ -305,6 +314,11 @@ export class ClaudeCli implements INodeType {
                     "executionMode",
                     itemIndex,
                 ) as ClaudeExecutionMode;
+                const sessionId = this.getNodeParameter(
+                    "sessionId",
+                    itemIndex,
+                    "",
+                ) as string;
 
                 const command = buildClaudeCommand({
                     executionMode,
@@ -323,6 +337,7 @@ export class ClaudeCli implements INodeType {
                     isRemoteControlEnabled: options.isRemoteControlEnabled,
                     shouldInheritUserConfig: options.shouldInheritUserConfig,
                     resumeSessionId: resumeSessionId || undefined,
+                    sessionId: sessionId || undefined,
                     sessionName: options.sessionName,
                     model: options.model,
                     effort: options.effort,

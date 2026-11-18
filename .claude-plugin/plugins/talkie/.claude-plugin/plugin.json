@@ -1,0 +1,10 @@
+{
+  "name": "talkie",
+  "description": "장표 HTML 에 대본, 음성, 자막, 유튜브식 재생 컨트롤을 입혀 새 HTML 로 만드는 파이프라인",
+  "version": "0.1.0",
+  "author": {
+    "name": "toothlessdev",
+    "url": "https://github.com/toothlessdev"
+  },
+  "license": "MIT"
+}

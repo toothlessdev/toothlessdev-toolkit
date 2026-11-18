@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "motions.json: 슬라이드 안 애니메이션의 상대 순서",
+  "type": "object",
+  "required": ["motions"],
+  "additionalProperties": false,
+  "properties": {
+    "holdSecondsAfterSlide": {
+      "description": "음성과 애니메이션이 모두 끝난 뒤 다음 슬라이드까지 기다리는 시간입니다.",
+      "type": "number",
+      "minimum": 0
+    },
+    "motions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slideIndex", "name", "startAfter", "durationSeconds"],
+        "additionalProperties": false,
+        "properties": {
+          "slideIndex": { "type": "integer", "minimum": 0 },
+          "name": { "type": "string", "minLength": 1 },
+          "startAfter": {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "enum": ["slideStart", "lineStart", "lineEnd", "motionEnd"] },
+              "ref": { "description": "lineStart, lineEnd 는 줄 id, motionEnd 는 같은 슬라이드의 motion 이름입니다.", "type": "string" }
+            }
+          },
+          "delaySeconds": { "type": "number", "minimum": 0 },
+          "durationSeconds": {
+            "description": "null 이면 슬라이드가 끝날 때까지 이어지고 슬라이드 길이 계산에는 넣지 않습니다.",
+            "type": ["number", "null"],
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}

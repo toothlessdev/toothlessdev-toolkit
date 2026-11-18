@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "brief.json: 발표의 청중, 톤, 음성 설정",
+  "type": "object",
+  "required": [
+    "deckPath",
+    "audience",
+    "tone",
+    "targetMinutes",
+    "scriptSource",
+    "voice",
+    "speechSpeed",
+    "enhanceMotion"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "deckPath": { "type": "string", "minLength": 1 },
+    "audience": { "type": "string", "minLength": 1 },
+    "tone": { "type": "string", "minLength": 1 },
+    "targetMinutes": { "type": "number", "exclusiveMinimum": 0 },
+    "keyMessage": { "type": "string" },
+    "scriptSource": {
+      "description": "write 면 덱을 읽어 대본을 씁니다. keep 이면 existingScriptPath 의 문장을 그대로 씁니다.",
+      "enum": ["write", "keep"]
+    },
+    "existingScriptPath": { "type": "string" },
+    "voice": {
+      "enum": ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"]
+    },
+    "speechSpeed": { "type": "number", "minimum": 0.7, "maximum": 2 },
+    "accentColor": { "type": "string" },
+    "enhanceMotion": { "type": "boolean" }
+  }
+}

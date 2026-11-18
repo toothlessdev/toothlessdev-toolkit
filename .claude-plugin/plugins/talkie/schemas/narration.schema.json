@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "narration.json: 줄 id 별 발음 텍스트",
+  "type": "object",
+  "required": ["lines"],
+  "additionalProperties": false,
+  "properties": {
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "speak"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "speak": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

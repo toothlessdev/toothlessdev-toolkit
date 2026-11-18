@@ -1,0 +1,1097 @@
+<!-- talkie player: build_deck.py 가 이 파일을 그대로 삽입합니다. 덱마다 고치지 않습니다. -->
+<style data-talkie-ui>
+    :root {
+        --talkie-accent: #0078ff;
+        --talkie-ease: cubic-bezier(0.22, 0.8, 0.2, 1);
+    }
+
+    .talkie-ui,
+    .talkie-ui * {
+        box-sizing: border-box;
+    }
+
+    .talkie-ui {
+        font-family: "SUIT Variable", "Pretendard", "Apple SD Gothic Neo", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
+    }
+
+    html[data-talkie-started] body > *:not(.talkie-ui):not(dialog) {
+        cursor: default;
+    }
+
+    html[data-talkie-idle] body,
+    html[data-talkie-idle] body * {
+        cursor: none !important;
+    }
+
+    html[data-talkie-hide-ui] .talkie-ui {
+        display: none !important;
+    }
+
+    .talkie-subtitle {
+        position: fixed;
+        left: 50%;
+        bottom: calc(5vh + env(safe-area-inset-bottom, 0px));
+        z-index: 2147483000;
+        width: max-content;
+        max-width: min(84vw, 1400px);
+        padding: 0.5em 1em;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.74);
+        color: #fff;
+        font-size: clamp(15px, 2vw, 32px);
+        font-weight: 600;
+        line-height: 1.45;
+        text-align: center;
+        word-break: keep-all;
+        pointer-events: none;
+        opacity: 0;
+        transform: translate(-50%, 0);
+        transition:
+            opacity 160ms ease,
+            transform 220ms var(--talkie-ease);
+    }
+
+    .talkie-subtitle[data-visible] {
+        opacity: 1;
+    }
+
+    html[data-talkie-controls] .talkie-subtitle {
+        transform: translate(-50%, calc(-1 * var(--talkie-subtitle-lift, 64px)));
+    }
+
+    .talkie-bar {
+        position: fixed;
+        inset: auto 0 0;
+        z-index: 2147483001;
+        padding: 28px max(16px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+        /* 덱 하단의 푸터 글자가 컨트롤과 겹쳐 보이지 않게 컨트롤 줄까지는 거의 불투명하게 둡니다. */
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.94) 0, rgba(0, 0, 0, 0.9) 52px, rgba(0, 0, 0, 0) 100%);
+        color: #fff;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition:
+            opacity 180ms ease,
+            transform 220ms var(--talkie-ease);
+    }
+
+    html[data-talkie-controls] .talkie-bar {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .talkie-scrubber {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        height: 20px;
+        cursor: pointer;
+        touch-action: none;
+        outline: none;
+    }
+
+    .talkie-scrubber:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+
+    .talkie-chapter {
+        position: relative;
+        flex: var(--talkie-chapter-grow) 1 0;
+        min-width: 1px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.28);
+        transition: height 120ms ease;
+    }
+
+    .talkie-chapter i {
+        position: absolute;
+        inset: 0;
+        background: var(--talkie-accent);
+        transform: scaleX(var(--talkie-chapter-progress, 0));
+        transform-origin: left;
+    }
+
+    .talkie-scrubber:hover .talkie-chapter,
+    .talkie-scrubber[data-dragging] .talkie-chapter {
+        height: 5px;
+    }
+
+    .talkie-thumb {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 13px;
+        height: 13px;
+        margin: -6.5px 0 0 -6.5px;
+        border-radius: 50%;
+        background: var(--talkie-accent);
+        pointer-events: none;
+        transform: scale(0);
+        transition: transform 120ms var(--talkie-ease);
+    }
+
+    .talkie-scrubber:hover .talkie-thumb,
+    .talkie-scrubber[data-dragging] .talkie-thumb,
+    .talkie-scrubber:focus-visible .talkie-thumb {
+        transform: scale(1);
+    }
+
+    .talkie-tooltip {
+        position: absolute;
+        bottom: 24px;
+        left: 0;
+        max-width: 280px;
+        padding: 5px 9px;
+        overflow: hidden;
+        border-radius: 6px;
+        background: rgba(20, 20, 20, 0.94);
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateX(-50%);
+    }
+
+    .talkie-tooltip[data-visible] {
+        opacity: 1;
+    }
+
+    .talkie-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 40px;
+    }
+
+    .talkie-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #fff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        transition:
+            background 120ms ease,
+            transform 120ms ease;
+    }
+
+    .talkie-button:hover {
+        background: rgba(255, 255, 255, 0.14);
+    }
+
+    .talkie-button:active {
+        transform: scale(0.94);
+    }
+
+    .talkie-button:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: -2px;
+    }
+
+    .talkie-button svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+    }
+
+    .talkie-button[aria-pressed="true"] {
+        color: var(--talkie-accent);
+    }
+
+    .talkie-button[hidden] {
+        display: none;
+    }
+
+    .talkie-time {
+        padding: 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .talkie-chapter-title {
+        min-width: 0;
+        overflow: hidden;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .talkie-spacer {
+        flex: 1;
+    }
+
+    .talkie-rate {
+        position: relative;
+    }
+
+    .talkie-rate-menu {
+        position: absolute;
+        right: 0;
+        bottom: 46px;
+        display: none;
+        min-width: 88px;
+        padding: 4px;
+        border-radius: 10px;
+        background: rgba(20, 20, 20, 0.96);
+    }
+
+    .talkie-rate-menu[data-open] {
+        display: block;
+    }
+
+    .talkie-rate-menu .talkie-button {
+        width: 100%;
+        height: 34px;
+    }
+
+    .talkie-rate-menu .talkie-button[aria-checked="true"] {
+        color: var(--talkie-accent);
+    }
+
+    .talkie-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483002;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 16px;
+        background: rgba(6, 6, 8, 0.72);
+        color: rgba(255, 255, 255, 0.82);
+        text-align: center;
+    }
+
+    .talkie-overlay[hidden] {
+        display: none;
+    }
+
+    .talkie-overlay button {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 34px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--talkie-accent);
+        color: #fff;
+        font: inherit;
+        font-size: 20px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 140ms var(--talkie-ease);
+    }
+
+    .talkie-overlay button:hover {
+        transform: scale(1.03);
+    }
+
+    .talkie-overlay button:active {
+        transform: scale(0.97);
+    }
+
+    .talkie-overlay button:disabled {
+        opacity: 0.6;
+        cursor: progress;
+    }
+
+    .talkie-overlay svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+    }
+
+    .talkie-overlay p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .talkie-overlay kbd {
+        font: inherit;
+        font-weight: 700;
+    }
+
+    /* 터치에는 hover 가 없으므로 재생 위치 표시를 항상 보이고, 손가락이 닿는 영역을 넓힙니다. */
+    @media (pointer: coarse) {
+        .talkie-keyboard-hint {
+            display: none;
+        }
+
+        .talkie-scrubber {
+            height: 32px;
+        }
+
+        .talkie-chapter,
+        .talkie-scrubber:hover .talkie-chapter {
+            height: 4px;
+        }
+
+        .talkie-scrubber[data-dragging] .talkie-chapter {
+            height: 6px;
+        }
+
+        .talkie-thumb {
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            transform: scale(1);
+        }
+
+        .talkie-tooltip {
+            bottom: 34px;
+            max-width: calc(100vw - 32px);
+            font-size: 13px;
+        }
+
+        .talkie-row {
+            height: 44px;
+        }
+
+        .talkie-button {
+            min-width: 44px;
+            height: 44px;
+        }
+
+        .talkie-rate-menu {
+            bottom: 50px;
+        }
+
+        .talkie-rate-menu .talkie-button {
+            height: 44px;
+        }
+    }
+
+    /* 좁은 화면은 슬라이드 제목, 재생 위치, 버튼을 세 줄로 나눕니다. 한 줄에 모으면 제목이 잘려서 읽을 수 없습니다. */
+    @media (max-width: 640px) {
+        .talkie-bar {
+            display: grid;
+            grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+            padding-top: 24px;
+            padding-right: max(10px, env(safe-area-inset-right, 0px));
+            padding-left: max(10px, env(safe-area-inset-left, 0px));
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.94) 0, rgba(0, 0, 0, 0.9) 75%, rgba(0, 0, 0, 0) 100%);
+        }
+
+        .talkie-row {
+            display: contents;
+        }
+
+        .talkie-chapter-title {
+            grid-row: 1;
+            grid-column: 1 / -1;
+            padding-inline: 6px;
+        }
+
+        .talkie-scrubber {
+            grid-row: 2;
+            grid-column: 1 / -1;
+            gap: 1px;
+            margin-inline: 6px;
+        }
+
+        .talkie-time {
+            align-self: center;
+            padding-inline: 2px;
+        }
+
+        .talkie-subtitle {
+            max-width: 92vw;
+        }
+    }
+
+    /* 가로로 눕힌 휴대폰은 세로 공간이 좁아서 자막과 컨트롤을 줄여 덱을 가리는 면적을 줄입니다. */
+    @media (max-height: 480px) {
+        .talkie-bar {
+            padding-top: 12px;
+        }
+
+        .talkie-subtitle {
+            bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+            padding: 0.3em 0.8em;
+            font-size: 14px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .talkie-ui,
+        .talkie-ui * {
+            transition: none !important;
+        }
+    }
+</style>
+<script data-talkie-ui>
+    /* xstate@5.33.2: esbuild --bundle --minify --format=iife --global-name=XState 로 setup, assign, createActor 만 묶었습니다. */
+    var XState=(()=>{var ot=Object.defineProperty;var ue=Object.getOwnPropertyDescriptor;var fe=Object.getOwnPropertyNames;var he=Object.prototype.hasOwnProperty;var de=(e,t)=>{for(var n in t)ot(e,n,{get:t[n],enumerable:!0})},le=(e,t,n,s)=>{if(t&&typeof t=="object"||typeof t=="function")for(let i of fe(t))!he.call(e,i)&&i!==n&&ot(e,i,{get:()=>t[i],enumerable:!(s=ue(t,i))||s.enumerable});return e};var pe=e=>le(ot({},"__esModule",{value:!0}),e);var mn={};de(mn,{assign:()=>w,createActor:()=>b,setup:()=>Tt});function ye(){if(typeof globalThis<"u")return globalThis;if(typeof self<"u")return self;if(typeof window<"u")return window;if(typeof global<"u")return global}function me(){let e=ye();if(e.__xstate__)return e.__xstate__}var Et=e=>{if(typeof window>"u")return;let t=me();t&&t.register(e)};var Z=class{constructor(t){this._process=t,this._active=!1,this._current=null,this._last=null}start(){this._active=!0,this.flush()}clear(){this._current&&(this._current.next=null,this._last=this._current)}enqueue(t){let n={value:t,next:null};if(this._current){this._last.next=n,this._last=n;return}this._current=n,this._last=n,this._active&&this.flush()}flush(){for(;this._current;){let t=this._current;this._process(t.value),this._current=t.next}this._last=null}},pt=".",ge="",yt="",ve="#",_e="*",Mt="xstate.init",Ct="xstate.error",ut="xstate.stop";function Se(e,t){return{type:`xstate.after.${e}.${t}`}}function ft(e,t){return{type:`xstate.done.state.${e}`,output:t}}function be(e,t){return{type:`xstate.done.actor.${e}`,output:t,actorId:e}}function mt(e,t){return{type:`xstate.error.actor.${e}`,error:t,actorId:e}}function F(e){return{type:Mt,input:e}}function v(e){setTimeout(()=>{throw e})}var xe=typeof Symbol=="function"&&Symbol.observable||"@@observable";function gt(e,t){let n=It(e),s=It(t);return typeof s=="string"?typeof n=="string"?s===n:!1:typeof n=="string"?n in s:Object.keys(n).every(i=>i in s?gt(n[i],s[i]):!1)}function V(e){if(Dt(e))return e;let t=[],n="";for(let s=0;s<e.length;s++){switch(e.charCodeAt(s)){case 92:n+=e[s+1],s++;continue;case 46:t.push(n),n="";continue}n+=e[s]}return t.push(n),t}function It(e){if(ne(e))return e.value;if(typeof e!="string")return e;let t=V(e);return jt(t)}function jt(e){if(e.length===1)return e[0];let t={},n=t;for(let s=0;s<e.length-1;s++)if(s===e.length-2)n[e[s]]=e[s+1];else{let i=n;n={},i[e[s]]=n}return t}function vt(e,t){let n={},s=Object.keys(e);for(let i=0;i<s.length;i++){let r=s[i];n[r]=t(e[r],r,e,i)}return n}function Rt(e){return Dt(e)?e:[e]}function S(e){return e===void 0?[]:Rt(e)}function ht(e,t,n,s){return typeof e=="function"?e({context:t,event:n,self:s}):e}function Dt(e){return Array.isArray(e)}function we(e){return e.type.startsWith("xstate.error.actor")}function E(e){return Rt(e).map(t=>typeof t>"u"||typeof t=="string"?{target:t}:t)}function Lt(e){if(!(e===void 0||e===ge))return S(e)}function G(e,t,n){let s=typeof e=="object",i=s?e:void 0;return{next:(s?e.next:e)?.bind(i),error:(s?e.error:t)?.bind(i),complete:(s?e.complete:n)?.bind(i)}}function _t(e,t){return`${t}.${e}`}function W(e,t){let n=t.match(/^xstate\.invoke\.(\d+)\.(.*)/);if(!n)return e.implementations.actors[t];let[,s,i]=n,o=e.getStateNodeById(i).config.invoke;return(Array.isArray(o)?o[s]:o).src}function Jt(e,t){if(t===e||t===_e)return!0;if(!t.endsWith(".*"))return!1;let n=t.split("."),s=e.split(".");for(let i=0;i<n.length;i++){let r=n[i],o=s[i];if(r==="*")return i===n.length-1;if(r!==o)return!1}return!0}function At(e,t){return`${e.sessionId}.${t}`}var Te=0;function Pt(e,t){let n=new Map,s=new Map,i=new WeakMap,r=new Set,o={},{clock:a,logger:f}=t,l={schedule:(c,h,d,y,m=Math.random().toString(36).slice(2))=>{let O={source:c,target:h,event:d,delay:y,id:m,startedAt:Date.now()},M=At(c,m);u._snapshot._scheduledEvents[M]=O;let ce=a.setTimeout(()=>{delete o[M],delete u._snapshot._scheduledEvents[M],u._relay(c,h,d)},y);o[M]=ce},cancel:(c,h)=>{let d=At(c,h),y=o[d];delete o[d],delete u._snapshot._scheduledEvents[d],y!==void 0&&a.clearTimeout(y)},cancelAll:c=>{for(let h in u._snapshot._scheduledEvents){let d=u._snapshot._scheduledEvents[h];d.source===c&&l.cancel(c,d.id)}}},p=c=>{if(!r.size)return;let h={...c,rootId:e.sessionId};r.forEach(d=>d.next?.(h))},u={_snapshot:{_scheduledEvents:(t?.snapshot&&t.snapshot.scheduler)??{}},_bookId:()=>`x:${Te++}`,_register:(c,h)=>(n.set(c,h),c),_unregister:c=>{n.delete(c.sessionId);let h=i.get(c);h!==void 0&&(s.delete(h),i.delete(c))},get:c=>s.get(c),getAll:()=>Object.fromEntries(s.entries()),_set:(c,h)=>{let d=s.get(c);if(d&&d!==h)throw new Error(`Actor with system ID '${c}' already exists.`);s.set(c,h),i.set(h,c)},inspect:c=>{let h=G(c);return r.add(h),{unsubscribe(){r.delete(h)}}},_sendInspectionEvent:p,_relay:(c,h,d)=>{u._sendInspectionEvent({type:"@xstate.event",sourceRef:c,actorRef:h,event:d}),h._send(d)},scheduler:l,getSnapshot:()=>({_scheduledEvents:{...u._snapshot._scheduledEvents}}),start:()=>{let c=u._snapshot._scheduledEvents;u._snapshot._scheduledEvents={};for(let h in c){let{source:d,target:y,event:m,delay:O,id:M}=c[h];l.schedule(d,y,m,O,M)}},_clock:a,_logger:f};return u}var at=!1,Q=1,g=(function(e){return e[e.NotStarted=0]="NotStarted",e[e.Running=1]="Running",e[e.Stopped=2]="Stopped",e})({}),Ee={clock:{setTimeout:(e,t)=>setTimeout(e,t),clearTimeout:e=>clearTimeout(e)},logger:console.log.bind(console),devTools:!1},N=class{constructor(t,n){this.logic=t,this._snapshot=void 0,this.clock=void 0,this.options=void 0,this.id=void 0,this.mailbox=new Z(this._process.bind(this)),this.observers=new Set,this.eventListeners=new Map,this.logger=void 0,this._processingStatus=g.NotStarted,this._parent=void 0,this._syncSnapshot=void 0,this.ref=void 0,this._actorScope=void 0,this.systemId=void 0,this.sessionId=void 0,this.system=void 0,this._doneEvent=void 0,this.src=void 0,this._deferred=[];let s={...Ee,...n},{clock:i,logger:r,parent:o,syncSnapshot:a,id:f,systemId:l,inspect:p}=s;this.system=o?o.system:Pt(this,{clock:i,logger:r}),p&&!o&&this.system.inspect(G(p)),this.sessionId=this.system._bookId(),this.id=f??this.sessionId,this.logger=n?.logger??this.system._logger,this.clock=n?.clock??this.system._clock,this._parent=o,this._syncSnapshot=a,this.options=s,this.src=s.src??t,this.ref=this,this._actorScope={self:this,id:this.id,sessionId:this.sessionId,logger:this.logger,defer:u=>{this._deferred.push(u)},system:this.system,stopChild:u=>{if(u._parent!==this)throw new Error(`Cannot stop child actor ${u.id} of ${this.id} because it is not a child`);u._stop()},emit:u=>{let c=this.eventListeners.get(u.type),h=this.eventListeners.get("*");if(!c&&!h)return;let d=[...c?c.values():[],...h?h.values():[]];for(let y of d)try{y(u)}catch(m){v(m)}},actionExecutor:u=>{let c=()=>{if(this._actorScope.system._sendInspectionEvent({type:"@xstate.action",actorRef:this,action:{type:u.type,params:u.params}}),!u.exec)return;let h=at;try{at=!0,u.exec(u.info,u.params)}finally{at=h}};this._processingStatus===g.Running?c():this._deferred.push(c)}},this.send=this.send.bind(this),this.system._sendInspectionEvent({type:"@xstate.actor",actorRef:this}),l&&(this.systemId=l,this.system._set(l,this)),this._initState(n?.snapshot??n?.state),l&&this._snapshot.status!=="active"&&this.system._unregister(this)}_initState(t){try{this._snapshot=t?this.logic.restoreSnapshot?this.logic.restoreSnapshot(t,this._actorScope):t:this.logic.getInitialSnapshot(this._actorScope,this.options?.input)}catch(n){this._snapshot={status:"error",output:void 0,error:n}}}update(t,n){this._snapshot=t;let s;for(;s=this._deferred.shift();)try{s()}catch(i){this._deferred.length=0,this._snapshot={...t,status:"error",error:i}}switch(this._snapshot.status){case"active":for(let i of this.observers)try{i.next?.(t)}catch(r){v(r)}break;case"done":for(let i of this.observers)try{i.next?.(t)}catch(r){v(r)}this._stopProcedure(),this._complete(),this._doneEvent=be(this.id,this._snapshot.output),this._parent&&this.system._relay(this,this._parent,this._doneEvent);break;case"error":this._error(this._snapshot.error);break}this.system._sendInspectionEvent({type:"@xstate.snapshot",actorRef:this,event:n,snapshot:t})}subscribe(t,n,s){let i=G(t,n,s);if(this._processingStatus!==g.Stopped)this.observers.add(i);else switch(this._snapshot.status){case"done":try{i.complete?.()}catch(r){v(r)}break;case"error":{let r=this._snapshot.error;if(!i.error)v(r);else try{i.error(r)}catch(o){v(o)}break}}return{unsubscribe:()=>{this.observers.delete(i)}}}on(t,n){let s=this.eventListeners.get(t);s||(s=new Set,this.eventListeners.set(t,s));let i=n.bind(void 0);return s.add(i),{unsubscribe:()=>{s.delete(i)}}}select(t,n=Object.is){return{subscribe:s=>{let i=G(s),r=this.getSnapshot(),o=t(r);return this.subscribe(a=>{let f=t(a);n(o,f)||(o=f,i.next?.(f))})},get:()=>t(this.getSnapshot())}}start(){if(this._processingStatus===g.Running)return this;this._syncSnapshot&&this.subscribe({next:s=>{s.status==="active"&&this.system._relay(this,this._parent,{type:`xstate.snapshot.${this.id}`,snapshot:s})},error:()=>{}}),this.system._register(this.sessionId,this),this.systemId&&this.system._set(this.systemId,this),this._processingStatus=g.Running;let t=F(this.options.input);switch(this.system._sendInspectionEvent({type:"@xstate.event",sourceRef:this._parent,actorRef:this,event:t}),this._snapshot.status){case"done":return this.update(this._snapshot,t),this;case"error":return this._error(this._snapshot.error),this}if(this._parent||this.system.start(),this.logic.start)try{this.logic.start(this._snapshot,this._actorScope)}catch(s){return this._snapshot={...this._snapshot,status:"error",error:s},this._error(s),this}return this.update(this._snapshot,t),this.options.devTools&&this.attachDevTools(),this.mailbox.start(),this}_process(t){let n,s;try{n=this.logic.transition(this._snapshot,t,this._actorScope)}catch(i){s={err:i}}if(s){let{err:i}=s;this._snapshot={...this._snapshot,status:"error",error:i},this._error(i);return}this.update(n,t),t.type===ut&&(this._stopProcedure(),this._complete())}_stop(){return this._processingStatus===g.Stopped?this:(this.mailbox.clear(),this._processingStatus===g.NotStarted?(this._processingStatus=g.Stopped,this):(this.mailbox.enqueue({type:ut}),this))}stop(){if(this._parent)throw new Error("A non-root actor cannot be stopped directly.");return this._stop()}_complete(){for(let t of this.observers)try{t.complete?.()}catch(n){v(n)}this.observers.clear(),this.eventListeners.clear()}_reportError(t){if(!this.observers.size){this._parent||v(t),this.eventListeners.clear();return}let n=!1;for(let s of this.observers){let i=s.error;n||=!i;try{i?.(t)}catch(r){v(r)}}this.observers.clear(),this.eventListeners.clear(),n&&v(t)}_error(t){this._stopProcedure(),this._reportError(t),this._parent&&this.system._relay(this,this._parent,mt(this.id,t))}_stopProcedure(){return this._processingStatus!==g.Running?this:(this.system.scheduler.cancelAll(this),this.mailbox.clear(),this.mailbox=new Z(this._process.bind(this)),this._processingStatus=g.Stopped,this.system._unregister(this),this)}_send(t){this._processingStatus!==g.Stopped&&this.mailbox.enqueue(t)}send(t){this.system._relay(void 0,this,t)}attachDevTools(){let{devTools:t}=this.options;t&&(typeof t=="function"?t:Et)(this)}toJSON(){return{xstate$$type:Q,id:this.id}}getPersistedSnapshot(t){return this.logic.getPersistedSnapshot(this._snapshot,t)}[xe](){return this}getSnapshot(){return this._snapshot}};function b(e,...[t]){return new N(e,t)}function Ie(e,t,n,s,{sendId:i}){let r=typeof i=="function"?i(n,s):i;return[t,{sendId:r},void 0]}function Ae(e,t){e.defer(()=>{e.system.scheduler.cancel(e.self,t.sendId)})}function D(e){function t(n,s){}return t.type="xstate.cancel",t.sendId=e,t.resolve=Ie,t.execute=Ae,t}function ke(e,t,n,s,{id:i,systemId:r,src:o,input:a,syncSnapshot:f}){let l=typeof o=="string"?W(t.machine,o):o,p=typeof i=="function"?i(n):i,u,c;return l&&(c=typeof a=="function"?a({context:t.context,event:n.event,self:e.self}):a,u=b(l,{id:p,src:o,parent:e.self,syncSnapshot:f,systemId:r,input:c})),[_(t,{children:{...t.children,[p]:u}}),{id:i,systemId:r,actorRef:u,src:o,input:c},void 0]}function $e(e,{actorRef:t}){t&&e.defer(()=>{t._processingStatus!==g.Stopped&&t.start()})}function L(...[e,{id:t,systemId:n,input:s,syncSnapshot:i=!1}={}]){function r(o,a){}return r.type="xstate.spawnChild",r.id=t,r.systemId=n,r.src=e,r.input=s,r.syncSnapshot=i,r.resolve=ke,r.execute=$e,r}function Oe(e,t,n,s,{actorRef:i}){let r=typeof i=="function"?i(n,s):i,o=typeof r=="string"?t.children[r]:r,a=t.children;return o&&(a={...a},delete a[o.id]),[_(t,{children:a}),o,void 0]}function qt(e,t){let n=t.getSnapshot();if(n&&"children"in n)for(let s of Object.values(n.children))qt(e,s);e.system._unregister(t)}function Me(e,t){if(t){if(qt(e,t),t._processingStatus!==g.Running){e.stopChild(t);return}e.defer(()=>{e.stopChild(t)})}}function k(e){function t(n,s){}return t.type="xstate.stopChild",t.actorRef=e,t.resolve=Oe,t.execute=Me,t}function Ce(e,{context:t,event:n},{guards:s}){return s.every(i=>$(i,t,n,e))}function Bt(e){function t(n,s){return!1}return t.check=Ce,t.guards=e,t}function $(e,t,n,s){let{machine:i}=s,r=typeof e=="function",o=r?e:i.implementations.guards[typeof e=="string"?e:e.type];if(!r&&!o)throw new Error(`Guard '${typeof e=="string"?e:e.type}' is not implemented.'.`);if(typeof o!="function")return $(o,t,n,s);let a={context:t,event:n},f=r||typeof e=="string"?void 0:"params"in e?typeof e.params=="function"?e.params({context:t,event:n}):e.params:void 0;return"check"in o?o.check(s,a,o):o(a,f)}function tt(e){return e.type==="atomic"||e.type==="final"}function j(e){return Object.values(e.states).filter(t=>t.type!=="history")}function J(e,t){let n=[];if(t===e)return n;let s=e.parent;for(;s&&s!==t;)n.push(s),s=s.parent;return n}function H(e){let t=new Set(e),n=Gt(t);for(let s of t)if(s.type==="compound"&&(!n.get(s)||!n.get(s).length))kt(s).forEach(i=>t.add(i));else if(s.type==="parallel"){for(let i of j(s))if(i.type!=="history"&&!t.has(i)){let r=kt(i);for(let o of r)t.add(o)}}for(let s of t){let i=s.parent;for(;i;)t.add(i),i=i.parent}return t}function zt(e,t){let n=t.get(e);if(!n)return{};if(e.type==="compound"){let i=n[0];if(i){if(tt(i))return i.key}else return{}}let s={};for(let i of n)s[i.key]=zt(i,t);return s}function Gt(e){let t=new Map;for(let n of e)t.has(n)||t.set(n,[]),n.parent&&(t.has(n.parent)||t.set(n.parent,[]),t.get(n.parent).push(n));return t}function Ut(e,t){let n=H(t);return zt(e,Gt(n))}function et(e,t){return t.type==="compound"?j(t).some(n=>n.type==="final"&&e.has(n)):t.type==="parallel"?j(t).every(n=>et(e,n)):t.type==="final"}var Y=e=>e[0]===ve;function Wt(e,t){let n=e.transitions.get(t),s=[...e.transitions.keys()].filter(i=>i!==t&&Jt(t,i)).sort((i,r)=>r.length-i.length).flatMap(i=>e.transitions.get(i));return n?[...n,...s]:s}function Ht(e){let t=e.config.after;if(!t)return[];let n=i=>{let r=Se(i,e.id),o=r.type;return e.entry.push(B(r,{id:o,delay:i})),e.exit.push(D(o)),o};return Object.keys(t).flatMap(i=>{let r=t[i],o=typeof r=="string"?{target:r}:r,a=Number.isNaN(+i)?i:+i,f=n(a);return S(o).map(l=>({...l,event:f,delay:a}))}).map(i=>{let{delay:r}=i;return{...x(e,i.event,i),delay:r}})}function x(e,t,n){let s=Lt(n.target),i=n.reenter??!1,r=je(e,s),o={...n,actions:S(n.actions),guard:n.guard,target:r,source:e,reenter:i,eventType:t,toJSON:()=>({...o,source:`#${e.id}`,target:r?r.map(a=>`#${a.id}`):void 0})};return o}function Yt(e){let t=new Map;if(e.config.on)for(let n of Object.keys(e.config.on)){if(n===yt)throw new Error('Null events ("") cannot be specified as a transition key. Use `always: { ... }` instead.');let s=e.config.on[n];t.set(n,E(s).map(i=>x(e,n,i)))}if(e.config.onDone){let n=`xstate.done.state.${e.id}`;t.set(n,E(e.config.onDone).map(s=>x(e,n,s)))}for(let n of e.invoke){if(n.onDone){let s=`xstate.done.actor.${n.id}`;t.set(s,E(n.onDone).map(i=>x(e,s,i)))}if(n.onError){let s=`xstate.error.actor.${n.id}`;t.set(s,E(n.onError).map(i=>x(e,s,i)))}if(n.onSnapshot){let s=`xstate.snapshot.${n.id}`;t.set(s,E(n.onSnapshot).map(i=>x(e,s,i)))}}for(let n of e.after){let s=t.get(n.eventType);s||(s=[],t.set(n.eventType,s)),s.push(n)}return t}function Xt(e){let t=[],n=s=>{Object.values(s).forEach(i=>{if(i.config.route&&i.config.id){let r=i.config.id,o=i.config.route.guard,a=({event:l})=>l.to===`#${r}`,f={...i.config.route,guard:o?Bt([a,o]):a,target:`#${r}`};t.push(x(e,"xstate.route",f))}i.states&&n(i.states)})};n(e.states),t.length>0&&e.transitions.set("xstate.route",t)}function Kt(e,t){let n=typeof t=="string"?e.states[t]:t?e.states[t.target]:void 0;if(!n&&t)throw new Error(`Initial state node "${t}" not found on parent state node #${e.id}`);let s={source:e,actions:!t||typeof t=="string"?[]:S(t.actions),eventType:null,reenter:!1,target:n?[n]:[],meta:typeof t=="object"?t.meta:void 0,description:typeof t=="object"?t.description:void 0,toJSON:()=>({...s,source:`#${e.id}`,target:n?[`#${n.id}`]:[]})};return s}function je(e,t){if(t!==void 0)return t.map(n=>{if(typeof n!="string")return n;if(Y(n))return e.machine.getStateNodeById(n);let s=n[0]===pt;if(s&&!e.parent)return U(e,n.slice(1));let i=s?e.key+n:n;if(e.parent)try{return U(e.parent,i)}catch(r){throw new Error(`Invalid transition definition for state node '${e.id}':
+${r.message}`)}else throw new Error(`Invalid target: "${n}" is not a valid target from the root node. Did you mean ".${n}"?`)})}function Zt(e){let t=Lt(e.config.target);return t?{target:t.map(n=>typeof n=="string"?U(e.parent,n):n)}:e.parent.type==="parallel"?{target:[e.parent]}:e.parent.initial}function I(e){return e.type==="history"}function kt(e){let t=Nt(e);for(let n of t)for(let s of J(n,e))t.add(s);return t}function Nt(e){let t=new Set;function n(s){if(!t.has(s)){if(t.add(s),s.type==="compound")n(s.initial.target[0]);else if(s.type==="parallel")for(let i of j(s))n(i)}}return n(e),t}function R(e,t){if(Y(t))return e.machine.getStateNodeById(t);if(!e.states)throw new Error(`Unable to retrieve child state '${t}' from '${e.id}'; no child states exist.`);let n=e.states[t];if(!n)throw new Error(`Child state '${t}' does not exist on '${e.id}'`);return n}function U(e,t){if(typeof t=="string"&&Y(t))try{return e.machine.getStateNodeById(t)}catch{}let n=V(t).slice(),s=e;for(;n.length;){let i=n.shift();if(!i.length)break;s=R(s,i)}return s}function P(e,t){if(typeof t=="string"){let i=e.states[t];if(!i)throw new Error(`State '${t}' does not exist on '${e.id}'`);return[e,i]}let n=Object.keys(t),s=n.map(i=>R(e,i)).filter(Boolean);return[e.machine.root,e].concat(s,n.reduce((i,r)=>{let o=R(e,r);if(!o)return i;let a=P(o,t[r]);return i.concat(a)},[]))}function Re(e,t,n,s){let r=R(e,t).next(n,s);return!r||!r.length?e.next(n,s):r}function De(e,t,n,s){let i=Object.keys(t),r=R(e,i[0]),o=nt(r,t[i[0]],n,s);return!o||!o.length?e.next(n,s):o}function Le(e,t,n,s){let i=[];for(let r of Object.keys(t)){let o=t[r];if(!o)continue;let a=R(e,r),f=nt(a,o,n,s);f&&i.push(...f)}return i.length?i:e.next(n,s)}function nt(e,t,n,s){return typeof t=="string"?Re(e,t,n,s):Object.keys(t).length===1?De(e,t,n,s):Le(e,t,n,s)}function Je(e){return Object.keys(e.states).map(t=>e.states[t]).filter(t=>t.type==="history")}function T(e,t){let n=e;for(;n.parent&&n.parent!==t;)n=n.parent;return n.parent===t}function Pe(e,t){let n=new Set(e),s=new Set(t);for(let i of n)if(s.has(i))return!0;for(let i of s)if(n.has(i))return!0;return!1}function Ft(e,t,n){let s=new Set;for(let i of e){let r=!1,o=new Set;for(let a of s)if(Pe(dt([i],t,n),dt([a],t,n)))if(T(i.source,a.source))o.add(a);else{r=!0;break}if(!r){for(let a of o)s.delete(a);s.add(i)}}return Array.from(s)}function qe(e){let[t,...n]=e;for(let s of J(t,void 0))if(n.every(i=>T(i,s)))return s}function St(e,t){if(!e.target)return[];let n=new Set;for(let s of e.target)if(I(s))if(t[s.id])for(let i of t[s.id])n.add(i);else for(let i of St(Zt(s),t))n.add(i);else n.add(s);return[...n]}function Vt(e,t){let n=St(e,t);if(!n)return;if(!e.reenter&&n.every(i=>i===e.source||T(i,e.source)))return e.source;let s=qe(n.concat(e.source));if(s)return s;if(!e.reenter)return e.source.machine.root}function dt(e,t,n){let s=new Set;for(let i of e)if(i.target?.length){let r=Vt(i,n);i.reenter&&i.source===r&&s.add(r);for(let o of t)T(o,r)&&s.add(o)}return[...s]}function Be(e,t){if(e.length!==t.size)return!1;for(let n of e)if(!t.has(n))return!1;return!0}function bt(e,t,n,s,i){return lt([{target:[...Nt(e)],source:e,reenter:!0,actions:[],eventType:null,toJSON:null}],t,n,s,!0,i)}function lt(e,t,n,s,i,r){let o=[];if(!e.length)return[t,o];let a=n.actionExecutor;n.actionExecutor=f=>{o.push(f),a(f)};try{let f=new Set(t._nodes),l=t.historyValue,p=Ft(e,f,l),u=t;i||([u,l]=We(u,s,n,p,f,l,r,n.actionExecutor)),u=A(u,s,n,p.flatMap(h=>h.actions),r,void 0),u=Ge(u,s,n,p,f,r,l,i);let c=[...f];u.status==="done"&&(u=A(u,s,n,c.sort((h,d)=>d.order-h.order).flatMap(h=>h.exit),r,void 0));try{return l===t.historyValue&&Be(t._nodes,f)?[u,o]:[_(u,{_nodes:c,historyValue:l}),o]}catch(h){throw h}}finally{n.actionExecutor=a}}function ze(e,t,n,s,i){if(s.output===void 0)return;let r=ft(i.id,i.output!==void 0&&i.parent?ht(i.output,e.context,t,n.self):void 0);return ht(s.output,e.context,r,n.self)}function Ge(e,t,n,s,i,r,o,a){let f=e,l=new Set,p=new Set;Ue(s,o,p,l),a&&p.add(e.machine.root);let u=new Set;for(let c of[...l].sort((h,d)=>h.order-d.order)){i.add(c);let h=[];h.push(...c.entry);for(let d of c.invoke)h.push(L(d.src,{...d,syncSnapshot:!!d.onSnapshot}));if(p.has(c)){let d=c.initial.actions;h.push(...d)}if(f=A(f,t,n,h,r,c.invoke.map(d=>d.id)),c.type==="final"){let d=c.parent,y=d?.type==="parallel"?d:d?.parent,m=y||c;for(d?.type==="compound"&&r.push(ft(d.id,c.output!==void 0?ht(c.output,f.context,t,n.self):void 0));y?.type==="parallel"&&!u.has(y)&&et(i,y);)u.add(y),r.push(ft(y.id)),m=y,y=y.parent;if(y)continue;f=_(f,{status:"done",output:ze(f,t,n,f.machine.root,m)})}}return f}function Ue(e,t,n,s){for(let i of e){let r=Vt(i,t);for(let a of i.target||[])!I(a)&&(i.source!==a||i.source!==r||i.reenter)&&(s.add(a),n.add(a)),C(a,t,n,s);let o=St(i,t);for(let a of o){let f=J(a,r);r?.type==="parallel"&&f.push(r),Qt(s,t,n,f,!i.source.parent&&i.reenter?void 0:r)}}}function C(e,t,n,s){if(I(e))if(t[e.id]){let i=t[e.id];for(let r of i)s.add(r),C(r,t,n,s);for(let r of i)ct(r,e.parent,s,t,n)}else{let i=Zt(e);for(let r of i.target)s.add(r),i===e.parent?.initial&&n.add(e.parent),C(r,t,n,s);for(let r of i.target)ct(r,e.parent,s,t,n)}else if(e.type==="compound"){let[i]=e.initial.target;I(i)||(s.add(i),n.add(i)),C(i,t,n,s),ct(i,e,s,t,n)}else if(e.type==="parallel")for(let i of j(e).filter(r=>!I(r)))[...s].some(r=>T(r,i))||(I(i)||(s.add(i),n.add(i)),C(i,t,n,s))}function Qt(e,t,n,s,i){for(let r of s)if((!i||T(r,i))&&e.add(r),r.type==="parallel")for(let o of j(r).filter(a=>!I(a)))[...e].some(a=>T(a,o))||(e.add(o),C(o,t,n,e))}function ct(e,t,n,s,i){Qt(n,s,i,J(e,t))}function We(e,t,n,s,i,r,o,a){let f=e,l=dt(s,i,r);l.sort((u,c)=>c.order-u.order);let p;for(let u of l)for(let c of Je(u)){let h;c.history==="deep"?h=d=>tt(d)&&T(d,u):h=d=>d.parent===u,p??={...r},p[c.id]=Array.from(i).filter(h)}for(let u of l)f=A(f,t,n,[...u.exit,...u.invoke.map(c=>k(c.id))],o,void 0),i.delete(u);return[f,p||r]}function He(e,t){return e.implementations.actions[t]}function te(e,t,n,s,i,r){let{machine:o}=e,a=e;for(let f of s){let l=typeof f=="function",p=l?f:He(o,typeof f=="string"?f:f.type),u={context:a.context,event:t,self:n.self,system:n.system},c=l||typeof f=="string"?void 0:"params"in f?typeof f.params=="function"?f.params({context:a.context,event:t}):f.params:void 0;if(!p||!("resolve"in p)){n.actionExecutor({type:typeof f=="string"?f:typeof f=="object"?f.type:f.name||"(anonymous)",info:u,params:c,exec:p});continue}let h=p,[d,y,m]=h.resolve(n,a,u,c,p,i);a=d,"retryResolve"in h&&r?.push([h,y]),"execute"in h&&n.actionExecutor({type:h.type,info:u,params:y,exec:h.execute.bind(null,n,y)}),m&&(a=te(a,t,n,m,i,r))}return a}function A(e,t,n,s,i,r){let o=r?[]:void 0,a=te(e,t,n,s,{internalQueue:i,deferredActorIds:r},o);return o?.forEach(([f,l])=>{f.retryResolve(n,a,l)}),a}function X(e,t,n,s){let i=e,r=[];function o(u,c,h){n.system._sendInspectionEvent({type:"@xstate.microstep",actorRef:n.self,event:c,snapshot:u[0],_transitions:h}),r.push(u)}if(t.type===ut)return i=_($t(i,t,n),{status:"stopped"}),o([i,[]],t,[]),{snapshot:i,microsteps:r};let a=t;if(a.type!==Mt){let u=a,c=we(u),h=Ot(u,i);if(c&&!h.length)return i=_(e,{status:"error",error:u.error}),o([i,[]],u,[]),{snapshot:i,microsteps:r};let d=lt(h,e,n,a,!1,s);i=d[0],o(d,u,h)}let f=!0,l=e.machine.options?.maxIterations??1/0,p=0;for(;i.status==="active";){if(p++,p>l)throw new Error(`Infinite loop detected: the machine has processed more than ${l} microsteps without reaching a stable state. This usually happens when there's a cycle of transitions (e.g., eventless transitions or raised events causing state A -> B -> C -> A).`);let u=f?Ye(i,a):[],c=u.length?i:void 0;if(!u.length){if(!s.length)break;a=s.shift(),u=Ot(a,i)}let h=lt(u,i,n,a,!1,s);i=h[0],f=i!==c,o(h,a,u)}return i.status!=="active"&&$t(i,a,n),{snapshot:i,microsteps:r}}function $t(e,t,n){return A(e,t,n,Object.values(e.children).map(s=>k(s)),[],void 0)}function Ot(e,t){return t.machine.getTransitionData(t,e)}function Ye(e,t){let n=new Set,s=e._nodes.filter(tt);for(let i of s)t:for(let r of[i].concat(J(i,void 0)))if(r.always){for(let o of r.always)if(o.guard===void 0||$(o.guard,e.context,t,e)){n.add(o);break t}}return Ft(Array.from(n),new Set(e._nodes),e.historyValue)}function ee(e,t){let n=H(P(e,t));return Ut(e,[...n])}function ne(e){return!!e&&typeof e=="object"&&"machine"in e&&"value"in e}var Xe=function(t){return gt(t,this.value)},Ke=function(t){return this.tags.has(t)},Ze=function(t){let n=this.machine.getTransitionData(this,t);return!!n?.length&&n.some(s=>s.target!==void 0||s.actions.length)},Ne=function(){let{_nodes:t,tags:n,machine:s,getMeta:i,toJSON:r,can:o,hasTag:a,matches:f,...l}=this;return{...l,tags:Array.from(n)}},Fe=function(){return this._nodes.reduce((t,n)=>(n.meta!==void 0&&(t[n.id]=n.meta),t),{})};function q(e,t){return{status:e.status,output:e.output,error:e.error,machine:t,context:e.context,_nodes:e._nodes,value:Ut(t.root,e._nodes),tags:new Set(e._nodes.flatMap(n=>n.tags)),children:e.children,historyValue:e.historyValue||{},matches:Xe,hasTag:Ke,can:Ze,getMeta:Fe,toJSON:Ne}}function _(e,t={}){return q({...e,...t},e.machine)}function Ve(e){if(typeof e!="object"||e===null)return{};let t={};for(let n in e){let s=e[n];Array.isArray(s)&&(t[n]=s.map(i=>({id:i.id})))}return t}function se(e,t){let{_nodes:n,tags:s,machine:i,children:r,context:o,can:a,hasTag:f,matches:l,getMeta:p,toJSON:u,...c}=e,h={};for(let y in r){let m=r[y];h[y]={snapshot:m.getPersistedSnapshot(t),src:m.src,systemId:m.systemId,syncSnapshot:m._syncSnapshot}}return{...c,context:ie(o),children:h,historyValue:Ve(c.historyValue)}}function ie(e){let t;for(let n in e){let s=e[n];if(s&&typeof s=="object")if("sessionId"in s&&"send"in s&&"ref"in s)t??=Array.isArray(e)?e.slice():{...e},t[n]={xstate$$type:Q,id:s.id};else{let i=ie(s);i!==s&&(t??=Array.isArray(e)?e.slice():{...e},t[n]=i)}}return t??e}function Qe(e,t,n,s,{event:i,id:r,delay:o},{internalQueue:a}){let f=t.machine.implementations.delays;if(typeof i=="string")throw new Error(`Only event objects may be used with raise; use raise({ type: "${i}" }) instead`);let l=typeof i=="function"?i(n,s):i,p;if(typeof o=="string"){let u=f&&f[o];p=typeof u=="function"?u(n,s):u}else p=typeof o=="function"?o(n,s):o;return typeof p!="number"&&a.push(l),[t,{event:l,id:r,delay:p},void 0]}function tn(e,t){let{event:n,delay:s,id:i}=t;if(typeof s=="number"){e.defer(()=>{let r=e.self;e.system.scheduler.schedule(r,r,n,s,i)});return}}function B(e,t){function n(s,i){}return n.type="xstate.raise",n.event=e,n.id=t?.id,n.delay=t?.delay,n.resolve=Qe,n.execute=tn,n}function en(e,{machine:t,context:n},s,i){let r=(o,a)=>{if(typeof o=="string"){let f=W(t,o);if(!f)throw new Error(`Actor logic '${o}' not implemented in machine '${t.id}'`);let l=b(f,{id:a?.id,parent:e.self,syncSnapshot:a?.syncSnapshot,input:typeof a?.input=="function"?a.input({context:n,event:s,self:e.self}):a?.input,src:o,systemId:a?.systemId});return i[l.id]=l,l}else return b(o,{id:a?.id,parent:e.self,syncSnapshot:a?.syncSnapshot,input:a?.input,src:o,systemId:a?.systemId})};return(o,a)=>{let f=r(o,a);return i[f.id]=f,e.defer(()=>{f._processingStatus!==g.Stopped&&f.start()}),f}}function nn(e,t,n,s,{assignment:i}){if(!t.context)throw new Error("Cannot assign to undefined `context`. Ensure that `context` is defined in the machine config.");let r={},o={context:t.context,event:n.event,spawn:en(e,t,n.event,r),self:e.self,system:e.system},a={};if(typeof i=="function")a=i(o,s);else for(let l of Object.keys(i)){let p=i[l];a[l]=typeof p=="function"?p(o,s):p}let f=Object.assign({},t.context,a);return[_(t,{context:f,children:Object.keys(r).length?{...t.children,...r}:t.children}),void 0,void 0]}function w(e){function t(n,s){}return t.type="xstate.assign",t.assignment=e,t.resolve=nn,t}var re=new WeakMap;function z(e,t,n){let s=re.get(e);return s?t in s||(s[t]=n()):(s={[t]:n()},re.set(e,s)),s[t]}var sn={},K=e=>typeof e=="string"?{type:e}:typeof e=="function"?"resolve"in e?{type:e.type}:{type:e.name}:e,st=class e{constructor(t,n){if(this.config=t,this.key=void 0,this.id=void 0,this.type=void 0,this.path=void 0,this.states=void 0,this.history=void 0,this.entry=void 0,this.exit=void 0,this.parent=void 0,this.machine=void 0,this.meta=void 0,this.output=void 0,this.order=-1,this.description=void 0,this.tags=[],this.transitions=void 0,this.always=void 0,this.parent=n._parent,this.key=n._key,this.machine=n._machine,this.path=this.parent?this.parent.path.concat(this.key):[],this.id=this.config.id||[this.machine.id,...this.path].join(pt),this.type=this.config.type||(this.config.states&&Object.keys(this.config.states).length?"compound":this.config.history?"history":"atomic"),this.description=this.config.description,this.order=this.machine.idMap.size,this.machine.idMap.set(this.id,this),this.states=this.config.states?vt(this.config.states,(s,i)=>new e(s,{_parent:this,_key:i,_machine:this.machine})):sn,this.type==="compound"&&!this.config.initial)throw new Error(`No initial state specified for compound state node "#${this.id}". Try adding { initial: "${Object.keys(this.states)[0]}" } to the state config.`);this.history=this.config.history===!0?"shallow":this.config.history||!1,this.entry=S(this.config.entry).slice(),this.exit=S(this.config.exit).slice(),this.meta=this.config.meta,this.output=this.type==="final"||!this.parent?this.config.output:void 0,this.tags=S(t.tags).slice()}_initialize(){this.transitions=Yt(this),this.config.always&&(this.always=E(this.config.always).map(t=>x(this,yt,t))),Object.keys(this.states).forEach(t=>{this.states[t]._initialize()})}get definition(){return{id:this.id,key:this.key,version:this.machine.version,type:this.type,initial:this.initial?{target:this.initial.target,source:this,actions:this.initial.actions.map(K),eventType:null,reenter:!1,meta:this.initial.meta,description:this.initial.description,toJSON:()=>({target:this.initial.target.map(t=>`#${t.id}`),source:`#${this.id}`,actions:this.initial.actions.map(K),eventType:null,meta:this.initial.meta,description:this.initial.description})}:void 0,history:this.history,states:vt(this.states,t=>t.definition),on:this.on,transitions:[...this.transitions.values()].flat().map(t=>({...t,actions:t.actions.map(K)})),entry:this.entry.map(K),exit:this.exit.map(K),meta:this.meta,order:this.order||-1,output:this.output,invoke:this.invoke,description:this.description,tags:this.tags}}toJSON(){return this.definition}get invoke(){return z(this,"invoke",()=>S(this.config.invoke).map((t,n)=>{let{src:s,systemId:i}=t,r=t.id??_t(this.id,n),o=typeof s=="string"?s:`xstate.invoke.${_t(this.id,n)}`;return{...t,src:o,id:r,systemId:i,toJSON(){let{onDone:a,onError:f,...l}=t;return{...l,type:"xstate.invoke",src:o,id:r}}}}))}get on(){return z(this,"on",()=>[...this.transitions].flatMap(([n,s])=>s.map(i=>[n,i])).reduce((n,[s,i])=>(n[s]=n[s]||[],n[s].push(i),n),{}))}get after(){return z(this,"delayedTransitions",()=>Ht(this))}get initial(){return z(this,"initial",()=>Kt(this,this.config.initial))}next(t,n){let s=n.type,i=[],r,o=z(this,`candidates-${s}`,()=>Wt(this,s));for(let a of o){let{guard:f}=a,l=t.context,p=!1;try{p=!f||$(f,l,n,t)}catch(u){let c=typeof f=="string"?f:typeof f=="object"?f.type:void 0;throw new Error(`Unable to evaluate guard ${c?`'${c}' `:""}in transition for event '${s}' in state node '${this.id}':
+${u.message}`)}if(p){i.push(...a.actions),r=a;break}}return r?[r]:void 0}get events(){return z(this,"events",()=>{let{states:t}=this,n=new Set(this.ownEvents);if(t)for(let s of Object.keys(t)){let i=t[s];if(i.states)for(let r of i.events)n.add(`${r}`)}return Array.from(n)})}get ownEvents(){let t=Object.keys(Object.fromEntries(this.transitions)),n=new Set(t.filter(s=>this.transitions.get(s).some(i=>!(!i.target&&!i.actions.length&&!i.reenter))));return Array.from(n)}},rn="#",it=class e{constructor(t,n){this.config=t,this.version=void 0,this.schemas=void 0,this.implementations=void 0,this.options=void 0,this.__xstatenode=!0,this.idMap=new Map,this.root=void 0,this.id=void 0,this.states=void 0,this.events=void 0,this.id=t.id||"(machine)",this.implementations={actors:n?.actors??{},actions:n?.actions??{},delays:n?.delays??{},guards:n?.guards??{}},this.version=this.config.version,this.schemas=this.config.schemas,this.options={maxIterations:1/0,...this.config.options},this.transition=this.transition.bind(this),this.getInitialSnapshot=this.getInitialSnapshot.bind(this),this.getPersistedSnapshot=this.getPersistedSnapshot.bind(this),this.restoreSnapshot=this.restoreSnapshot.bind(this),this.start=this.start.bind(this),this.root=new st(t,{_key:this.id,_machine:this}),this.root._initialize(),Xt(this.root),this.states=this.root.states,this.events=this.root.events}provide(t){let{actions:n,guards:s,actors:i,delays:r}=this.implementations;return new e(this.config,{actions:{...n,...t.actions},guards:{...s,...t.guards},actors:{...i,...t.actors},delays:{...r,...t.delays}})}resolveState(t){let n=ee(this.root,t.value),s=H(P(this.root,n));return q({_nodes:[...s],context:t.context||{},children:{},status:et(s,this.root)?"done":t.status||"active",output:t.output,error:t.error,historyValue:t.historyValue},this)}transition(t,n,s){return X(t,n,s,[]).snapshot}microstep(t,n,s){return X(t,n,s,[]).microsteps.map(([i])=>i)}getTransitionData(t,n){return nt(this.root,t.value,t,n)||[]}_getPreInitialState(t,n,s){let{context:i}=this.config,r=q({context:typeof i!="function"&&i?i:{},_nodes:[this.root],children:{},status:"active"},this);return typeof i=="function"?A(r,n,t,[w(({spawn:a,event:f,self:l})=>i({spawn:a,input:f.input,self:l}))],s,void 0):r}getInitialSnapshot(t,n){let s=F(n),i=[],r=q({context:typeof this.config.context!="function"&&this.config.context?this.config.context:{},_nodes:[this.root],children:{},status:"active"},this);try{r=this._getPreInitialState(t,s,i);let[o]=bt(this.root,r,t,s,i),{snapshot:a}=X(o,s,t,i);return a}catch(o){return _(r,{status:"error",error:o})}}start(t){Object.values(t.children).forEach(n=>{n.getSnapshot().status==="active"&&n.start()})}getStateNodeById(t){let n=V(t),s=n.slice(1),i=Y(n[0])?n[0].slice(rn.length):n[0],r=this.idMap.get(i);if(!r)throw new Error(`Child state node '#${i}' does not exist on machine '${this.id}'`);return U(r,s)}get definition(){return this.root.definition}toJSON(){return this.definition}getPersistedSnapshot(t,n){return se(t,n)}restoreSnapshot(t,n){let s={},i=t.children;Object.keys(i).forEach(u=>{let c=i[u],h=c.snapshot,d=c.src,y=typeof d=="string"?W(this,d):d;if(!y)return;let m=b(y,{id:u,parent:n.self,syncSnapshot:c.syncSnapshot,snapshot:h,src:d,systemId:c.systemId});s[u]=m});function r(u,c){if(c instanceof st)return c;try{return u.machine.getStateNodeById(c.id)}catch{}}function o(u,c){if(!c||typeof c!="object")return{};let h={};for(let d in c){let y=c[d];for(let m of y){let O=r(u,m);O&&(h[d]??=[],h[d].push(O))}}return h}let a=o(this.root,t.historyValue),f=q({...t,children:s,_nodes:Array.from(H(P(this.root,t.value))),historyValue:a},this),l=new Set;function p(u,c){if(!l.has(u)){l.add(u);for(let h in u){let d=u[h];if(d&&typeof d=="object"){if("xstate$$type"in d&&d.xstate$$type===Q){u[h]=c[d.id];continue}p(d,c)}}}}return p(f.context,s),f}};function on(e,t,n,s,{event:i}){let r=typeof i=="function"?i(n,s):i;return[t,{event:r},void 0]}function an(e,{event:t}){e.defer(()=>e.emit(t))}function wt(e){function t(n,s){}return t.type="xstate.emit",t.event=e,t.resolve=on,t.execute=an,t}var xt=(function(e){return e.Parent="#_parent",e.Internal="#_internal",e})({});function cn(e,t,n,s,{to:i,event:r,id:o,delay:a},f){let l=t.machine.implementations.delays;if(typeof r=="string")throw new Error(`Only event objects may be used with sendTo; use sendTo({ type: "${r}" }) instead`);let p=typeof r=="function"?r(n,s):r,u;if(typeof a=="string"){let d=l&&l[a];u=typeof d=="function"?d(n,s):d}else u=typeof a=="function"?a(n,s):a;let c=typeof i=="function"?i(n,s):i,h;if(typeof c=="string"){if(c===xt.Parent?h=e.self._parent:c===xt.Internal?h=e.self:c.startsWith("#_")?h=t.children[c.slice(2)]:h=f.deferredActorIds?.includes(c)?c:t.children[c],!h)throw new Error(`Unable to send event to actor '${c}' from machine '${t.machine.id}'.`)}else h=c||e.self;return[t,{to:h,targetId:typeof c=="string"?c:void 0,event:p,id:o,delay:u},void 0]}function un(e,t,n){typeof n.to=="string"&&(n.to=t.children[n.to])}function fn(e,t){e.defer(()=>{let{to:n,event:s,delay:i,id:r}=t;if(typeof i=="number"){e.system.scheduler.schedule(e.self,n,s,i,r);return}e.system._relay(e.self,n,s.type===Ct?mt(e.self.id,s.data):s)})}function rt(e,t,n){function s(i,r){}return s.type="xstate.sendTo",s.to=e,s.event=t,s.id=n?.id,s.delay=n?.delay,s.resolve=cn,s.retryResolve=un,s.execute=fn,s}function hn(e,t){return rt(xt.Parent,e,t)}function dn(e,t,n,s,{collect:i}){let r=[],o=function(f){r.push(f)};return o.assign=(...a)=>{r.push(w(...a))},o.cancel=(...a)=>{r.push(D(...a))},o.raise=(...a)=>{r.push(B(...a))},o.sendTo=(...a)=>{r.push(rt(...a))},o.sendParent=(...a)=>{r.push(hn(...a))},o.spawnChild=(...a)=>{r.push(L(...a))},o.stopChild=(...a)=>{r.push(k(...a))},o.emit=(...a)=>{r.push(wt(...a))},i({context:n.context,event:n.event,enqueue:o,check:a=>$(a,t.context,n.event,t),self:e.self,system:e.system},s),[t,void 0,r]}function oe(e){function t(n,s){}return t.type="xstate.enqueueActions",t.collect=e,t.resolve=dn,t}function ln(e,t,n,s,{value:i,label:r}){return[t,{value:typeof i=="function"?i(n,s):i,label:r},void 0]}function pn({logger:e},{value:t,label:n}){n?e(n,t):e(t)}function ae(e=({context:n,event:s})=>({context:n,event:s}),t){function n(s,i){}return n.type="xstate.log",n.value=e,n.label=t,n.resolve=ln,n.execute=pn,n}function yn(e,t){return new it(e,t)}function Tt({schemas:e,actors:t,actions:n,guards:s,delays:i}){return{assign:w,sendTo:rt,raise:B,log:ae,cancel:D,stopChild:k,enqueueActions:oe,emit:wt,spawnChild:L,createStateConfig:r=>r,createAction:r=>r,createMachine:r=>yn({...r,schemas:e},{actors:t,actions:n,guards:s,delays:i}),extend:r=>Tt({schemas:e,actors:t,actions:{...n,...r.actions},guards:{...s,...r.guards},delays:{...i,...r.delays}})}}return pe(mn);})();
+</script>
+<script data-talkie-ui>
+    (() => {
+        const data = window.__TALKIE_DATA__;
+        const adapter = window.talkieAdapter;
+        const { timeline } = data;
+
+        const SEEK_STEP_SECONDS = 10;
+        const CONTROLS_IDLE_MS = 2500;
+        const DISCONTINUITY_SECONDS = 0.75;
+        const SUBTITLE_LINGER_SECONDS = 0.3;
+        const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
+
+        const ICONS = {
+            play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>',
+            pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg>',
+            replay: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1.5L7 6.5l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>',
+            subtitle:
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm2 8v2h8v-2zm10 0v2h2v-2zM6 10v2h2v-2zm4 0v2h8v-2z"/></svg>',
+            enterFullscreen:
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM6 15v3h3v2H4v-5zm14 0v5h-5v-2h3v-3z"/></svg>',
+            exitFullscreen:
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4V7h3V4zm6 0h2v3h3v2h-5zM4 15h5v5H7v-3H4zm11 0h5v2h-3v3h-2z"/></svg>',
+        };
+
+        function formatClock(seconds) {
+            const wholeSeconds = Math.max(0, Math.floor(seconds));
+            const minutes = Math.floor(wholeSeconds / 60);
+            return `${minutes}:${String(wholeSeconds % 60).padStart(2, "0")}`;
+        }
+
+        function findSlideAt(seconds) {
+            const { slides } = timeline;
+            for (let index = slides.length - 1; index >= 0; index -= 1) {
+                if (seconds >= slides[index].startSeconds) return slides[index];
+            }
+            return slides[0];
+        }
+
+        function findLineTextAt(slide, seconds) {
+            const line = slide.lines.find(
+                (candidate) => seconds >= candidate.startSeconds && seconds < candidate.endSeconds + SUBTITLE_LINGER_SECONDS,
+            );
+            return line ? line.text : "";
+        }
+
+        function measureMotionElapsedByName(slide, seconds) {
+            const elapsedByName = {};
+            for (const motion of slide.motions) {
+                const elapsedSeconds = seconds - motion.startSeconds;
+                if (elapsedSeconds < 0) {
+                    elapsedByName[motion.name] = null;
+                } else if (motion.durationSeconds === null) {
+                    elapsedByName[motion.name] = elapsedSeconds;
+                } else {
+                    elapsedByName[motion.name] = Math.min(elapsedSeconds, motion.durationSeconds);
+                }
+            }
+            return elapsedByName;
+        }
+
+        function isPlayerElement(element) {
+            return element instanceof Element && element.closest("[data-talkie-ui]") !== null;
+        }
+
+        function listDeckAnimations() {
+            return document.getAnimations().filter((animation) => !isPlayerElement(animation.effect && animation.effect.target));
+        }
+
+        function finishDeckAnimations() {
+            if (adapter.ownsDocumentAnimations) return;
+            for (const animation of listDeckAnimations()) {
+                const { endTime, iterations } = animation.effect.getComputedTiming();
+                if (Number.isFinite(endTime) && Number.isFinite(iterations)) animation.finish();
+            }
+        }
+
+        function syncDeckAnimations(isClockRunning, playbackRate) {
+            if (adapter.ownsDocumentAnimations) return;
+            for (const animation of listDeckAnimations()) {
+                if (animation.playbackRate !== playbackRate) animation.updatePlaybackRate(playbackRate);
+                if (isClockRunning && animation.playState === "paused") animation.play();
+                if (!isClockRunning && animation.playState === "running") animation.pause();
+            }
+        }
+
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.preservesPitch = true;
+
+        const root = document.createElement("div");
+        root.className = "talkie-ui";
+        root.dataset.talkieUi = "";
+        root.innerHTML = `
+            <div class="talkie-subtitle" aria-live="off"></div>
+            <div class="talkie-bar">
+                <div class="talkie-scrubber" role="slider" tabindex="0" aria-label="재생 위치">
+                    <div class="talkie-tooltip"></div>
+                    <div class="talkie-thumb"></div>
+                </div>
+                <div class="talkie-row">
+                    <button type="button" class="talkie-button" data-action="toggle" aria-label="재생"></button>
+                    <span class="talkie-time"></span>
+                    <span class="talkie-chapter-title"></span>
+                    <span class="talkie-spacer"></span>
+                    <button type="button" class="talkie-button" data-action="subtitle" aria-label="자막" aria-pressed="true">${ICONS.subtitle}</button>
+                    <div class="talkie-rate">
+                        <button type="button" class="talkie-button" data-action="rate" aria-label="재생 속도" aria-haspopup="menu">1x</button>
+                        <div class="talkie-rate-menu" role="menu"></div>
+                    </div>
+                    <button type="button" class="talkie-button" data-action="fullscreen" aria-label="전체화면">${ICONS.enterFullscreen}</button>
+                </div>
+            </div>
+            <div class="talkie-overlay">
+                <button type="button" disabled>${ICONS.play}<span>불러오는 중</span></button>
+                <p class="talkie-keyboard-hint"><kbd>Space</kbd> 재생 · <kbd>← →</kbd> 슬라이드 이동 · <kbd>J L</kbd> 10초 이동 · <kbd>C</kbd> 자막 · <kbd>F</kbd> 전체화면</p>
+            </div>`;
+        document.body.append(root);
+
+        const subtitleElement = root.querySelector(".talkie-subtitle");
+        const scrubber = root.querySelector(".talkie-scrubber");
+        const tooltip = root.querySelector(".talkie-tooltip");
+        const thumb = root.querySelector(".talkie-thumb");
+        const toggleButton = root.querySelector('[data-action="toggle"]');
+        const subtitleButton = root.querySelector('[data-action="subtitle"]');
+        const rateButton = root.querySelector('[data-action="rate"]');
+        const rateMenu = root.querySelector(".talkie-rate-menu");
+        const fullscreenButton = root.querySelector('[data-action="fullscreen"]');
+        const timeLabel = root.querySelector(".talkie-time");
+        const chapterTitle = root.querySelector(".talkie-chapter-title");
+        const overlay = root.querySelector(".talkie-overlay");
+        const overlayButton = overlay.querySelector("button");
+        const barElement = root.querySelector(".talkie-bar");
+        const hoverCapability = window.matchMedia("(hover: hover)");
+
+        fullscreenButton.hidden = !document.documentElement.requestFullscreen;
+
+        if (data.accentColor) document.documentElement.style.setProperty("--talkie-accent", data.accentColor);
+
+        const chapterElements = timeline.slides.map((slide) => {
+            const chapter = document.createElement("div");
+            chapter.className = "talkie-chapter";
+            chapter.style.setProperty("--talkie-chapter-grow", String(slide.endSeconds - slide.startSeconds));
+            chapter.innerHTML = "<i></i>";
+            scrubber.insertBefore(chapter, tooltip);
+            return chapter;
+        });
+
+        for (const playbackRate of PLAYBACK_RATES) {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "talkie-button";
+            option.setAttribute("role", "menuitemradio");
+            option.setAttribute("aria-checked", String(playbackRate === 1));
+            option.dataset.rate = String(playbackRate);
+            option.textContent = `${playbackRate}x`;
+            rateMenu.append(option);
+        }
+
+        const playerMachine = XState.setup({
+            actions: {
+                playAudio: () => {
+                    audio.play().catch(() => actor.send({ type: "PLAY_BLOCKED" }));
+                },
+                pauseAudio: () => audio.pause(),
+                rewind: () => {
+                    audio.currentTime = 0;
+                },
+                rememberPlaying: XState.assign({ resumeAfterSeek: true }),
+                rememberStopped: XState.assign({ resumeAfterSeek: false }),
+            },
+            guards: {
+                shouldResumeAfterSeek: ({ context }) => context.resumeAfterSeek,
+            },
+        }).createMachine({
+            id: "talkiePlayer",
+            initial: "loading",
+            context: { resumeAfterSeek: false },
+            states: {
+                loading: {
+                    on: { AUDIO_READY: "ready", AUDIO_FAILED: "failed" },
+                },
+                failed: {},
+                ready: {
+                    on: {
+                        PLAY: "playing",
+                        TOGGLE: "playing",
+                        SEEK_START: { target: "seeking", actions: "rememberStopped" },
+                    },
+                },
+                playing: {
+                    entry: "playAudio",
+                    on: {
+                        PAUSE: "paused",
+                        TOGGLE: "paused",
+                        PLAY_BLOCKED: "paused",
+                        WAITING: "buffering",
+                        ENDED: "ended",
+                        SEEK_START: { target: "seeking", actions: "rememberPlaying" },
+                    },
+                },
+                buffering: {
+                    on: {
+                        RESUMED: "playing",
+                        PAUSE: "paused",
+                        TOGGLE: "paused",
+                        ENDED: "ended",
+                        SEEK_START: { target: "seeking", actions: "rememberPlaying" },
+                    },
+                },
+                paused: {
+                    entry: "pauseAudio",
+                    on: {
+                        PLAY: "playing",
+                        TOGGLE: "playing",
+                        SEEK_START: { target: "seeking", actions: "rememberStopped" },
+                    },
+                },
+                seeking: {
+                    entry: "pauseAudio",
+                    on: {
+                        SEEK_COMMIT: [{ guard: "shouldResumeAfterSeek", target: "playing" }, { target: "paused" }],
+                    },
+                },
+                ended: {
+                    on: {
+                        PLAY: { target: "playing", actions: "rewind" },
+                        TOGGLE: { target: "playing", actions: "rewind" },
+                        SEEK_START: { target: "seeking", actions: "rememberStopped" },
+                    },
+                },
+            },
+        });
+
+        const actor = XState.createActor(playerMachine);
+
+        let shownSlideIndex = -1;
+        let lastRenderedSeconds = 0;
+        let lastScrubberSlideIndex = -1;
+        let playbackRate = 1;
+        let isSubtitleEnabled = true;
+        let isDiscontinuityPending = true;
+        let idleTimerId = 0;
+
+        function renderAt(seconds) {
+            const isDiscontinuous = isDiscontinuityPending || Math.abs(seconds - lastRenderedSeconds) > DISCONTINUITY_SECONDS;
+            const slide = findSlideAt(seconds);
+            const isRunning = actor.getSnapshot().matches("playing");
+
+            if (slide.slideIndex !== shownSlideIndex) {
+                adapter.showSlide(slide.slideIndex, {
+                    isDiscontinuous: isDiscontinuous || slide.slideIndex !== shownSlideIndex + 1,
+                });
+                shownSlideIndex = slide.slideIndex;
+            }
+            adapter.seekMotion(slide.slideIndex, measureMotionElapsedByName(slide, seconds), {
+                isDiscontinuous,
+                localSeconds: seconds - slide.startSeconds,
+            });
+
+            if (isDiscontinuous) finishDeckAnimations();
+            syncDeckAnimations(isRunning, playbackRate);
+
+            renderSubtitle(slide, seconds);
+            renderScrubber(slide, seconds);
+
+            isDiscontinuityPending = false;
+            lastRenderedSeconds = seconds;
+        }
+
+        function renderSubtitle(slide, seconds) {
+            const text = isSubtitleEnabled ? findLineTextAt(slide, seconds) : "";
+            if (subtitleElement.textContent !== text && text !== "") subtitleElement.textContent = text;
+            subtitleElement.toggleAttribute("data-visible", text !== "");
+        }
+
+        function renderScrubber(slide, seconds) {
+            if (slide.slideIndex !== lastScrubberSlideIndex) {
+                chapterElements.forEach((chapter, index) => {
+                    chapter.style.setProperty("--talkie-chapter-progress", index < slide.slideIndex ? "1" : "0");
+                });
+                chapterTitle.textContent = `${slide.slideIndex + 1}. ${slide.title}`;
+                lastScrubberSlideIndex = slide.slideIndex;
+            }
+            const chapterProgress = (seconds - slide.startSeconds) / (slide.endSeconds - slide.startSeconds);
+            chapterElements[slide.slideIndex].style.setProperty("--talkie-chapter-progress", String(chapterProgress));
+
+            const chapterRect = chapterElements[slide.slideIndex].getBoundingClientRect();
+            const scrubberRect = scrubber.getBoundingClientRect();
+            thumb.style.left = `${chapterRect.left - scrubberRect.left + chapterRect.width * chapterProgress}px`;
+
+            timeLabel.textContent = `${formatClock(seconds)} / ${formatClock(timeline.durationSeconds)}`;
+            scrubber.setAttribute("aria-valuemin", "0");
+            scrubber.setAttribute("aria-valuemax", String(Math.round(timeline.durationSeconds)));
+            scrubber.setAttribute("aria-valuenow", String(Math.round(seconds)));
+            scrubber.setAttribute("aria-valuetext", `${formatClock(seconds)}, ${slide.slideIndex + 1}번 슬라이드 ${slide.title}`);
+        }
+
+        function runFrame() {
+            const snapshot = actor.getSnapshot();
+            if (snapshot.matches("playing") || snapshot.matches("buffering") || snapshot.matches("seeking")) {
+                renderAt(audio.currentTime);
+            }
+            requestAnimationFrame(runFrame);
+        }
+
+        function seekTo(seconds) {
+            audio.currentTime = Math.min(Math.max(0, seconds), timeline.durationSeconds);
+            isDiscontinuityPending = true;
+        }
+
+        function jumpTo(seconds) {
+            actor.send({ type: "SEEK_START" });
+            seekTo(seconds);
+            renderAt(audio.currentTime);
+            actor.send({ type: "SEEK_COMMIT" });
+            renderAt(audio.currentTime);
+        }
+
+        function jumpBySlide(delta) {
+            const slide = findSlideAt(audio.currentTime);
+            const targetIndex = Math.min(Math.max(0, slide.slideIndex + delta), timeline.slides.length - 1);
+            jumpTo(timeline.slides[targetIndex].startSeconds);
+        }
+
+        function secondsFromPointer(clientX) {
+            for (const [index, chapter] of chapterElements.entries()) {
+                const rect = chapter.getBoundingClientRect();
+                if (clientX <= rect.right || index === chapterElements.length - 1) {
+                    const slide = timeline.slides[index];
+                    const ratio = Math.min(Math.max(0, (clientX - rect.left) / rect.width), 1);
+                    return slide.startSeconds + ratio * (slide.endSeconds - slide.startSeconds);
+                }
+            }
+            return 0;
+        }
+
+        function showTooltip(clientX) {
+            const seconds = secondsFromPointer(clientX);
+            const slide = findSlideAt(seconds);
+            const rect = scrubber.getBoundingClientRect();
+            tooltip.textContent = `${formatClock(seconds)} · ${slide.slideIndex + 1}. ${slide.title}`;
+            const halfWidth = tooltip.offsetWidth / 2;
+            tooltip.style.left = `${Math.min(Math.max(halfWidth, clientX - rect.left), rect.width - halfWidth)}px`;
+            tooltip.toggleAttribute("data-visible", true);
+        }
+
+        function setPlaybackRate(nextRate) {
+            playbackRate = nextRate;
+            audio.playbackRate = nextRate;
+            rateButton.textContent = `${nextRate}x`;
+            for (const option of rateMenu.children) {
+                option.setAttribute("aria-checked", String(Number(option.dataset.rate) === nextRate));
+            }
+        }
+
+        function toggleSubtitle() {
+            isSubtitleEnabled = !isSubtitleEnabled;
+            subtitleButton.setAttribute("aria-pressed", String(isSubtitleEnabled));
+            renderSubtitle(findSlideAt(audio.currentTime), audio.currentTime);
+        }
+
+        function toggleFullscreen() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+                return;
+            }
+            if (!document.documentElement.requestFullscreen) return;
+            // 16:9 덱은 세로 휴대폰에서 화면의 4분의 1만 차지합니다. 방향 고정을 거절하는 기기가 있어도 전체화면은 유지합니다.
+            document.documentElement
+                .requestFullscreen()
+                .then(() => screen.orientation?.lock?.("landscape"))
+                .catch(() => {});
+        }
+
+        function start() {
+            document.documentElement.toggleAttribute("data-talkie-started", true);
+            overlay.hidden = true;
+            actor.send({ type: "PLAY" });
+        }
+
+        function revealControls() {
+            const rootElement = document.documentElement;
+            rootElement.toggleAttribute("data-talkie-controls", true);
+            rootElement.removeAttribute("data-talkie-idle");
+            clearTimeout(idleTimerId);
+            idleTimerId = setTimeout(hideControlsWhenIdle, CONTROLS_IDLE_MS);
+        }
+
+        function hideControls() {
+            clearTimeout(idleTimerId);
+            document.documentElement.removeAttribute("data-talkie-controls");
+            document.documentElement.toggleAttribute("data-talkie-idle", true);
+        }
+
+        function hideControlsWhenIdle() {
+            // 터치 기기는 손을 뗀 뒤에도 :hover 가 남아서 컨트롤이 영영 사라지지 않습니다.
+            const isHoveringBar = hoverCapability.matches && barElement.matches(":hover");
+            if (!actor.getSnapshot().matches("playing") || isHoveringBar || isDraggingScrubber || rateMenu.hasAttribute("data-open")) return;
+            hideControls();
+        }
+
+        function toggleControlsByTap() {
+            const isControlsVisible = document.documentElement.hasAttribute("data-talkie-controls");
+            if (isControlsVisible && actor.getSnapshot().matches("playing")) hideControls();
+            else revealControls();
+        }
+
+        function liftSubtitleAboveBar() {
+            const subtitleBottomPixels = parseFloat(getComputedStyle(subtitleElement).bottom) || 0;
+            const liftPixels = Math.max(0, barElement.offsetHeight + 8 - subtitleBottomPixels);
+            document.documentElement.style.setProperty("--talkie-subtitle-lift", `${liftPixels}px`);
+        }
+
+        function renderToggleButton(snapshot) {
+            const isEnded = snapshot.matches("ended");
+            const isPlayingLike = snapshot.matches("playing") || snapshot.matches("buffering");
+            toggleButton.innerHTML = isEnded ? ICONS.replay : isPlayingLike ? ICONS.pause : ICONS.play;
+            toggleButton.setAttribute("aria-label", isEnded ? "처음부터 재생" : isPlayingLike ? "일시정지" : "재생");
+        }
+
+        actor.subscribe((snapshot) => {
+            renderToggleButton(snapshot);
+            if (snapshot.matches("ready")) {
+                overlayButton.disabled = false;
+                overlayButton.querySelector("span").textContent = "발표 시작";
+            }
+            if (snapshot.matches("failed")) {
+                overlayButton.querySelector("span").textContent = "오디오를 불러오지 못했습니다";
+            }
+            if (!snapshot.matches("playing")) revealControls();
+            if (snapshot.matches("paused") || snapshot.matches("ended") || snapshot.matches("playing")) {
+                renderAt(audio.currentTime);
+            }
+        });
+        actor.start();
+
+        audio.addEventListener("loadedmetadata", () => actor.send({ type: "AUDIO_READY" }));
+        audio.addEventListener("error", () => {
+            // 샌드박스 iframe 처럼 blob 재생이 막힌 곳에서는 data URI 로 한 번 더 시도합니다.
+            if (data.audioBase64 && audio.src.startsWith("blob:")) {
+                audio.src = `data:audio/mpeg;base64,${data.audioBase64}`;
+                return;
+            }
+            actor.send({ type: "AUDIO_FAILED" });
+        });
+        audio.addEventListener("waiting", () => actor.send({ type: "WAITING" }));
+        audio.addEventListener("playing", () => actor.send({ type: "RESUMED" }));
+        audio.addEventListener("ended", () => actor.send({ type: "ENDED" }));
+
+        let isDraggingScrubber = false;
+        scrubber.addEventListener("pointerdown", (event) => {
+            isDraggingScrubber = true;
+            scrubber.setPointerCapture(event.pointerId);
+            scrubber.toggleAttribute("data-dragging", true);
+            actor.send({ type: "SEEK_START" });
+            seekTo(secondsFromPointer(event.clientX));
+            showTooltip(event.clientX);
+            revealControls();
+        });
+        scrubber.addEventListener("pointermove", (event) => {
+            showTooltip(event.clientX);
+            if (isDraggingScrubber) seekTo(secondsFromPointer(event.clientX));
+        });
+        scrubber.addEventListener("pointerleave", () => {
+            if (!isDraggingScrubber) tooltip.removeAttribute("data-visible");
+        });
+        const finishScrubberDrag = () => {
+            if (!isDraggingScrubber) return;
+            isDraggingScrubber = false;
+            scrubber.removeAttribute("data-dragging");
+            tooltip.removeAttribute("data-visible");
+            actor.send({ type: "SEEK_COMMIT" });
+        };
+        scrubber.addEventListener("pointerup", finishScrubberDrag);
+        scrubber.addEventListener("pointercancel", finishScrubberDrag);
+
+        toggleButton.addEventListener("click", () => actor.send({ type: "TOGGLE" }));
+        subtitleButton.addEventListener("click", toggleSubtitle);
+        fullscreenButton.addEventListener("click", toggleFullscreen);
+        overlayButton.addEventListener("click", start);
+        rateButton.addEventListener("click", () => rateMenu.toggleAttribute("data-open"));
+        rateMenu.addEventListener("click", (event) => {
+            const option = event.target.closest("[data-rate]");
+            if (!option) return;
+            setPlaybackRate(Number(option.dataset.rate));
+            rateMenu.removeAttribute("data-open");
+        });
+
+        document.addEventListener("fullscreenchange", () => {
+            fullscreenButton.innerHTML = document.fullscreenElement ? ICONS.exitFullscreen : ICONS.enterFullscreen;
+        });
+
+        window.addEventListener(
+            "pointermove",
+            (event) => {
+                if (event.pointerType !== "touch") revealControls();
+            },
+            { passive: true },
+        );
+        barElement.addEventListener("pointerdown", revealControls, { passive: true });
+
+        let lastPointerType = "mouse";
+        window.addEventListener(
+            "pointerdown",
+            (event) => {
+                lastPointerType = event.pointerType;
+            },
+            { capture: true, passive: true },
+        );
+
+        document.addEventListener("click", (event) => {
+            if (isPlayerElement(event.target)) return;
+            const interactiveSelector = ["a", "button", "input", "select", "textarea", "label", "summary", "dialog", adapter.interactiveSelector]
+                .filter(Boolean)
+                .join(",");
+            if (event.target instanceof Element && event.target.closest(interactiveSelector)) return;
+            if (rateMenu.hasAttribute("data-open")) {
+                rateMenu.removeAttribute("data-open");
+                return;
+            }
+            if (actor.getSnapshot().matches("ready")) return;
+            // 터치는 컨트롤을 보이는 수단이 탭뿐입니다. 탭이 일시정지가 되면 재생 중에 재생바를 볼 수 없습니다.
+            if (lastPointerType === "touch") toggleControlsByTap();
+            else actor.send({ type: "TOGGLE" });
+        });
+
+        new ResizeObserver(liftSubtitleAboveBar).observe(barElement);
+        window.addEventListener("resize", () => {
+            liftSubtitleAboveBar();
+            renderAt(audio.currentTime);
+        });
+
+        // 덱의 스와이프 핸들러가 재생 시계를 건너뛰고 슬라이드를 바꾸지 못하게 막습니다.
+        for (const touchEventName of ["touchstart", "touchend"]) {
+            window.addEventListener(
+                touchEventName,
+                (event) => {
+                    if (!isPlayerElement(event.target)) event.stopPropagation();
+                },
+                { capture: true, passive: true },
+            );
+        }
+
+        const KEY_HANDLERS = {
+            " ": () => (actor.getSnapshot().matches("ready") ? start() : actor.send({ type: "TOGGLE" })),
+            k: () => actor.send({ type: "TOGGLE" }),
+            arrowleft: () => jumpBySlide(-1),
+            pageup: () => jumpBySlide(-1),
+            arrowright: () => jumpBySlide(1),
+            pagedown: () => jumpBySlide(1),
+            j: () => jumpTo(audio.currentTime - SEEK_STEP_SECONDS),
+            l: () => jumpTo(audio.currentTime + SEEK_STEP_SECONDS),
+            home: () => jumpTo(0),
+            end: () => jumpTo(timeline.durationSeconds - 0.05),
+            c: toggleSubtitle,
+            f: toggleFullscreen,
+        };
+
+        window.addEventListener(
+            "keydown",
+            (event) => {
+                if (event.metaKey || event.ctrlKey || event.altKey) return;
+                if (document.querySelector("dialog[open]")) return;
+                if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
+                if (event.key === " " && event.target instanceof Element && event.target.closest("button,a")) {
+                    event.stopImmediatePropagation();
+                    return;
+                }
+                const handler = KEY_HANDLERS[event.key.toLowerCase()];
+                if (!handler) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                handler();
+                revealControls();
+            },
+            true,
+        );
+
+        function decodeBase64ToBlobUrl(base64) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+            return URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+        }
+
+        /**
+         * 호스팅 환경이 Range 요청을 지원하지 않으면 큰 파일의 탐색이 끊길 수 있어서,
+         * 받을 수 있으면 통째로 받아 blob URL 로 재생합니다.
+         */
+        async function loadAudio() {
+            if (data.audioBase64) {
+                audio.src = decodeBase64ToBlobUrl(data.audioBase64);
+                return;
+            }
+            try {
+                const response = await fetch(data.audioUrl);
+                if (!response.ok) throw new Error(String(response.status));
+                audio.src = URL.createObjectURL(await response.blob());
+            } catch {
+                audio.src = data.audioUrl;
+            }
+        }
+
+        /** inspect_seek.py 가 재생과 탐색 결과를 비교할 때 쓰는 검사 전용 진입점입니다. */
+        window.__talkie = {
+            getState: () => actor.getSnapshot().value,
+            getSeconds: () => audio.currentTime,
+            getAudioDurationSeconds: () => audio.duration,
+            getShownSlideIndex: () => shownSlideIndex,
+            start,
+            pause: () => actor.send({ type: "PAUSE" }),
+            jumpTo,
+            finishAnimations: finishDeckAnimations,
+            playUntil: (targetSeconds, leadSeconds) =>
+                new Promise((resolve) => {
+                    jumpTo(Math.max(0, targetSeconds - leadSeconds));
+                    actor.send({ type: "PLAY" });
+                    const poll = () => {
+                        if (audio.currentTime < targetSeconds) {
+                            requestAnimationFrame(poll);
+                            return;
+                        }
+                        actor.send({ type: "PAUSE" });
+                        audio.currentTime = targetSeconds;
+                        renderAt(targetSeconds);
+                        resolve();
+                    };
+                    poll();
+                }),
+        };
+
+        adapter.hideSelectors?.forEach((selector) => {
+            const style = document.createElement("style");
+            style.dataset.talkieUi = "";
+            style.textContent = `${selector}{display:none!important}`;
+            document.head.append(style);
+        });
+
+        adapter.prepare?.();
+        renderAt(0);
+        requestAnimationFrame(runFrame);
+        loadAudio();
+    })();
+</script>

@@ -264,6 +264,17 @@ export class ClaudeCli {
                 );
             }
 
+            /**
+             * claude 는 SIGTERM 을 직접 처리해 코드 143 으로 끝나므로 signal 이 비어 옵니다.
+             * 그래서 Node 가 시간 초과로 프로세스를 끝냈다는 표시인 killed 로 판정합니다.
+             */
+            if (failure.killed) {
+                throw new ClaudeTimedOutError(
+                    `claude 가 ${this.timeoutMs}ms 안에 끝나지 않아 중단됐습니다`,
+                    { cause: failure },
+                );
+            }
+
             return {
                 exitCode: failure.code ?? null,
                 signal: failure.signal ?? null,

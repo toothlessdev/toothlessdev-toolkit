@@ -47,7 +47,7 @@ const { result, sessionId } = await new ClaudeCli("claude", 300_000).run(
 
 ## 오류
 
-모두 `ClaudeError` 를 상속합니다.
+모두 `ClaudeError` 를 상속합니다. CLI 가 시간 초과로 받은 SIGTERM 을 직접 처리해 코드 143 으로 끝나도 `ClaudeTimedOutError` 입니다.
 
 | 클래스                      | 상황             |
 | --------------------------- | ---------------- |

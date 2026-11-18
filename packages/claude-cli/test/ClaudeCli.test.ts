@@ -243,6 +243,24 @@ describe("ClaudeCli", () => {
         });
     });
 
+    test("SIGTERM 을 처리해 143 으로 끝나도 시간 초과로 던진다", async () => {
+        const executable = writeFakeClaude(
+            `trap 'exit 143' TERM; sleep 5 & wait $!`,
+        );
+
+        await expect(
+            new ClaudeCli(executable, 100).run(command, temporaryDirectory),
+        ).rejects.toBeInstanceOf(ClaudeTimedOutError);
+    });
+
+    test("스스로 143 으로 끝나면 ClaudeFailedError 로 던진다", async () => {
+        const executable = writeFakeClaude("exit 143");
+
+        await expect(
+            new ClaudeCli(executable, 5000).run(command, temporaryDirectory),
+        ).rejects.toBeInstanceOf(ClaudeFailedError);
+    });
+
     test("취소하면 ClaudeCancelledError 로 던진다", async () => {
         const executable = writeFakeClaude("exec sleep 5");
         const controller = new AbortController();

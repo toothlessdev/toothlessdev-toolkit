@@ -21,6 +21,7 @@ Slack Socket Mode 이벤트로 워크플로를 시작하는 n8n 트리거 노드
 | Channel Messages | 지정한 채널의 사람 메시지 전체            | Channel IDs                                     |
 | Bot Messages     | 지정한 채널에서 허용한 봇의 메시지        | Allowed Bot IDs, Channel IDs                    |
 | Message Shortcut | 허용한 사용자가 단축키를 누른 메시지      | Callback ID, Allowed User IDs                   |
+| Channel Joins    | 지정한 사용자가 채널에 들어간 이벤트      | Joined User IDs                                 |
 | Event Silence    | 메시지가 아니라 이벤트가 끊긴 상태        | 없음                                            |
 
 - **우선순위:** 한 메시지가 여러 소스에 맞으면 Bot Messages, Mentions, Channel Messages 순으로 한 소스에만 갑니다.
@@ -36,6 +37,20 @@ Slack Socket Mode 이벤트로 워크플로를 시작하는 n8n 트리거 노드
 3. 트리거 노드의 Source 를 Message Shortcut 으로 두고 Callback ID 와 Allowed User IDs 를 넣습니다.
 
 출력은 메시지 필드에 `channel`, `triggeredBy`, `callbackId`, `teamId` 를 더한 값입니다. Allowed User IDs 가 비면 아무도 실행할 수 없습니다. 메시지 본문은 다른 사람이 쓴 글이므로 프롬프트에서 지시가 아닌 데이터로 다룹니다.
+
+## Channel Joins
+
+지정한 사용자가 채널에 들어가거나 초대받으면 워크플로를 시작합니다. Slack 은 채널 입장을 두 가지로 알리고, 앱이 구독한 쪽이 옵니다.
+
+| Slack 이 보내는 것                             | 필요한 구독                                         |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `channel_join`, `group_join` subtype 의 메시지 | 준비 3번의 메시지 이벤트                            |
+| `member_joined_channel` 이벤트                 | Event Subscriptions 에 `member_joined_channel` 추가 |
+
+- **둘 다 구독하면** 입장 한 번에 워크플로가 두 번 실행됩니다. 한쪽만 구독합니다.
+- **출력:** `channel`, `user`, 초대한 사람이 있으면 `inviter` 가 들어 있습니다. 채널 이름은 들어 있지 않습니다.
+- **채널 이름으로 거르기:** Slack 노드의 채널 조회(Channel, Get)로 이름을 읽습니다. 그 노드의 자격 증명에 `channels:read` 스코프가 필요하고, 비공개 채널은 `groups:read` 스코프와 채널 멤버 자격이 필요합니다.
+- Joined User IDs 가 비면 아무것도 받지 않습니다.
 
 ## Event Silence
 

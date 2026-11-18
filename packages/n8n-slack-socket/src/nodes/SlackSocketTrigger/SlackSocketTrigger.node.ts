@@ -53,6 +53,8 @@ function readSource(trigger: ITriggerFunctions): SlackSource {
                 allowedBotIds: readIds("allowedBotIds"),
                 channelIds: readIds("channelIds"),
             };
+        case "channelJoins":
+            return { kind, joinedUserIds: readIds("joinedUserIds") };
         case "eventSilence":
             return { kind };
         case "messageShortcut":
@@ -103,6 +105,12 @@ export class SlackSocketTrigger implements INodeType {
                         description: "지정한 채널에서 허용한 봇의 메시지",
                     },
                     {
+                        name: "Channel Joins",
+                        value: "channelJoins",
+                        description:
+                            "지정한 사용자가 채널에 들어가거나 초대받았을 때",
+                    },
+                    {
                         name: "Message Shortcut",
                         value: "messageShortcut",
                         description:
@@ -134,6 +142,17 @@ export class SlackSocketTrigger implements INodeType {
                 description:
                     "쉼표로 구분한 사용자 그룹. 이 그룹을 멘션한 메시지도 받습니다.",
                 displayOptions: { show: { source: ["mentions"] } },
+            },
+            {
+                displayName: "Joined User IDs",
+                name: "joinedUserIds",
+                type: "string",
+                default: "",
+                required: true,
+                placeholder: "U0123456789",
+                description:
+                    "쉼표로 구분한 사용자. 이 사용자가 채널에 들어갔을 때만 실행합니다. 비우면 아무것도 받지 않습니다.",
+                displayOptions: { show: { source: ["channelJoins"] } },
             },
             {
                 displayName: "Channel IDs",

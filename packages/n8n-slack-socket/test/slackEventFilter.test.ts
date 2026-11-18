@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
     matchesSlackSource,
     type BotMessagesSource,
+    type ChannelJoinsSource,
     type ChannelMessagesSource,
     type MentionsSource,
 } from "../src/slack/slackEventFilter";
@@ -154,6 +155,61 @@ describe("Bot Messages 소스", () => {
     ])("%s 는 거른다", (_, override) => {
         expect(
             matchesSlackSource({ ...botMessage, ...override }, botMessages),
+        ).toBe(false);
+    });
+});
+
+describe("Channel Joins 소스", () => {
+    const channelJoins: ChannelJoinsSource = {
+        kind: "channelJoins",
+        joinedUserIds: new Set([OWNER]),
+    };
+    const joinEvent = {
+        type: "member_joined_channel",
+        user: OWNER,
+        channel: "CINCIDENT",
+        inviter: "UALLOWED",
+    };
+    const joinMessage = {
+        type: "message",
+        subtype: "channel_join",
+        user: OWNER,
+        channel: "CINCIDENT",
+        text: `<@${OWNER}> 님이 채널에 참여함`,
+    };
+
+    test.each([
+        ["member_joined_channel 이벤트", joinEvent],
+        ["channel_join 메시지", joinMessage],
+        ["group_join 메시지", { ...joinMessage, subtype: "group_join" }],
+    ])("지정한 사용자의 %s 는 통과한다", (_name, event) => {
+        expect(matchesSlackSource(event, channelJoins)).toBe(true);
+    });
+
+    test.each([
+        ["다른 사람의 입장 이벤트", { ...joinEvent, user: "UALLOWED" }],
+        ["다른 사람의 입장 메시지", { ...joinMessage, user: "UALLOWED" }],
+        ["지정한 사용자의 일반 메시지", { ...joinMessage, subtype: undefined }],
+        ["채널을 나간 메시지", { ...joinMessage, subtype: "channel_leave" }],
+    ])("%s 는 받지 않는다", (_name, event) => {
+        expect(matchesSlackSource(event, channelJoins)).toBe(false);
+    });
+
+    test("사용자가 비면 아무것도 받지 않는다", () => {
+        expect(
+            matchesSlackSource(joinEvent, {
+                kind: "channelJoins",
+                joinedUserIds: new Set(),
+            }),
+        ).toBe(false);
+    });
+
+    test("입장 메시지는 메시지 소스로 가지 않는다", () => {
+        expect(
+            matchesSlackSource(
+                { ...joinMessage, user: "UALLOWED", channel: "CFULL" },
+                channelMessages,
+            ),
         ).toBe(false);
     });
 });

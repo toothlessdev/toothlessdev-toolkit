@@ -40,8 +40,16 @@ export interface MessageShortcutSource {
     readonly allowedUserIds: ReadonlySet<string>;
 }
 
+/** 지정한 사용자가 채널에 들어간(초대받은) 이벤트를 받습니다. */
+export interface ChannelJoinsSource {
+    readonly kind: "channelJoins";
+    /** 비어 있으면 아무것도 받지 않습니다. 비워 두면 채널에 누가 들어올 때마다 실행됩니다. */
+    readonly joinedUserIds: ReadonlySet<string>;
+}
+
 export type SlackSource =
     | MessageShortcutSource
+    | ChannelJoinsSource
     | MentionsSource
     | ChannelMessagesSource
     | BotMessagesSource
@@ -53,6 +61,7 @@ export type SlackSourceKind = SlackSource["kind"];
  * 앞선 종류에만 보내야 같은 메시지로 세션이 두 개 뜨지 않습니다.
  */
 export const SLACK_SOURCE_PRIORITY: readonly SlackSourceKind[] = [
+    "channelJoins",
     "botMessages",
     "mentions",
     "channelMessages",
@@ -141,10 +150,40 @@ function matchesBotMessages(
     );
 }
 
+/** 공개 채널은 channel_join, 예전 방식의 비공개 채널은 group_join 으로 옵니다. */
+const JOIN_MESSAGE_SUBTYPES: ReadonlySet<string> = new Set([
+    "channel_join",
+    "group_join",
+]);
+
+/**
+ * Slack 은 채널 입장을 member_joined_channel 이벤트와 "들어왔습니다" 메시지 두 가지로 알립니다.
+ * 앱이 구독한 쪽만 오므로 둘 다 받습니다.
+ */
+function matchesChannelJoins(
+    event: SlackEvent,
+    source: ChannelJoinsSource,
+): boolean {
+    const isJoin =
+        event.type === "member_joined_channel" ||
+        (event.type === "message" &&
+            event.subtype !== undefined &&
+            JOIN_MESSAGE_SUBTYPES.has(event.subtype));
+
+    return (
+        isJoin &&
+        event.user !== undefined &&
+        source.joinedUserIds.has(event.user)
+    );
+}
+
 export function matchesSlackSource(
     event: SlackEvent,
     source: SlackSource,
 ): boolean {
+    if (source.kind === "channelJoins") {
+        return matchesChannelJoins(event, source);
+    }
     if (event.type !== "message") return false;
 
     switch (source.kind) {

@@ -115,6 +115,88 @@ describe("ClaudeCli", () => {
         ).rejects.toBeInstanceOf(ClaudeTimedOutError);
     });
 
+    describe("같은 세션을 동시에 실행할 때", () => {
+        const SESSION_ID = "11111111-1111-4111-8111-111111111111";
+
+        function writeLoggingClaude(logPath: string): string {
+            return writeFakeClaude(
+                `label=$(cat); echo "start $label" >> ${logPath}; sleep 0.3; echo "end $label" >> ${logPath}; echo '{"result":"r","session_id":"s"}'`,
+            );
+        }
+
+        function runWith(
+            executable: string,
+            sessionOption: string[],
+            label: string,
+        ) {
+            return new ClaudeCli(executable, 5000).run(
+                {
+                    commandLineArguments: ["-p", ...sessionOption],
+                    standardInput: label,
+                },
+                temporaryDirectory,
+            );
+        }
+
+        test("앞 실행이 끝난 뒤에 뒤 실행을 시작한다", async () => {
+            const logPath = path.join(temporaryDirectory, "same-session.log");
+            const executable = writeLoggingClaude(logPath);
+
+            await Promise.all([
+                runWith(executable, ["--session-id", SESSION_ID], "first"),
+                runWith(executable, ["--resume", SESSION_ID], "second"),
+            ]);
+
+            expect(readFileSync(logPath, "utf8").trim().split("\n")).toEqual([
+                "start first",
+                "end first",
+                "start second",
+                "end second",
+            ]);
+        });
+
+        test("다른 세션은 기다리지 않고 함께 실행한다", async () => {
+            const logPath = path.join(temporaryDirectory, "other-session.log");
+            const executable = writeLoggingClaude(logPath);
+
+            await Promise.all([
+                runWith(executable, ["--resume", SESSION_ID], "first"),
+                runWith(
+                    executable,
+                    ["--resume", "22222222-2222-4222-8222-222222222222"],
+                    "second",
+                ),
+            ]);
+
+            const lines = readFileSync(logPath, "utf8").trim().split("\n");
+            expect(lines.slice(0, 2).toSorted()).toEqual([
+                "start first",
+                "start second",
+            ]);
+        });
+
+        test("앞 실행이 실패해도 뒤 실행은 진행한다", async () => {
+            const failing = writeFakeClaude(
+                `cat >/dev/null; sleep 0.2; exit 1`,
+            );
+            const succeeding = writeFakeClaude(
+                `cat >/dev/null; echo '{"result":"r","session_id":"s"}'`,
+            );
+            const sessionOption = [
+                "--resume",
+                "33333333-3333-4333-8333-333333333333",
+            ];
+
+            const [first, second] = await Promise.allSettled([
+                runWith(failing, sessionOption, "first"),
+                runWith(succeeding, sessionOption, "second"),
+            ]);
+
+            expect(first.status).toBe("rejected");
+            expect(second.status).toBe("fulfilled");
+        });
+    });
+
     describe("--json-schema", () => {
         const schemaCommand = {
             commandLineArguments: ["-p", "--json-schema", "{}"],

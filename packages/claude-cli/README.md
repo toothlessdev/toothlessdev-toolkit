@@ -43,6 +43,8 @@ const { result, sessionId } = await new ClaudeCli("claude", 300_000).run(
 - **프롬프트:** 인자가 아니라 stdin 으로 넘겨서 옵션으로 해석되지 않습니다.
 - **비용 상한:** `maxBudgetUsd` 가 0 이면 상한 없이 실행합니다. `-p` 에서만 적용됩니다.
 - **도구:** `tools` 의 `*` 는 전체 내장 도구입니다.
+- **세션 ID:** `sessionId` 를 넣으면 새 세션을 그 UUID 로 시작합니다. `-p` 에서만 쓸 수 있고 `resumeSessionId` 와 같이 쓸 수 없습니다.
+- **같은 세션 순서:** `ClaudeCli.run` 은 `--session-id` 나 `--resume` 이 같은 세션을 가리키는 실행을 한 프로세스 안에서 하나씩 순서대로 실행합니다. 동시에 이어 가면 뒤 실행이 앞 실행의 결과를 보지 못하기 때문입니다. 다른 프로세스에서 실행한 것까지는 막지 않습니다.
 - **추가 인자:** `additionalArguments` 는 맨 뒤에 붙어서 앞의 옵션보다 우선합니다.
 
 ## 오류

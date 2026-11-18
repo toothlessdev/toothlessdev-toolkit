@@ -13,6 +13,8 @@ export interface ClaudeRequest {
     /** 켜면 사용자의 MCP 서버, 스킬, 훅, 설정을 그대로 읽습니다. 외부 입력을 넘길 때는 위험합니다. */
     readonly shouldInheritUserConfig?: boolean;
     readonly resumeSessionId?: string;
+    /** 새 세션에 줄 UUID 입니다. 실행 전에 ID 를 알아야 알림과 대화 연결을 먼저 만들 수 있습니다. */
+    readonly sessionId?: string;
     readonly sessionName?: string;
     readonly model?: string;
     readonly effort?: string;
@@ -112,6 +114,7 @@ function buildOptionalArguments(request: ClaudeRequest): string[] {
             ["--system-prompt", request.systemPrompt],
             ["--append-system-prompt", request.appendedSystemPrompt],
             ["--resume", request.resumeSessionId],
+            ["--session-id", request.sessionId],
         ];
 
     return optionalValues.flatMap(([name, value]) =>
@@ -123,6 +126,20 @@ function assertValidSessionId(sessionId: string): void {
     if (!SESSION_ID_PATTERN.test(sessionId)) {
         throw new InvalidClaudeRequestError(
             `Session ID 는 UUID 형식이어야 합니다: ${sessionId}`,
+        );
+    }
+}
+
+/** Background 모드는 claude 가 정한 ID 를 목록에서 찾아 돌려주고, 이어 가는 세션은 ID 가 이미 정해져 있습니다. */
+function assertCanPresetSessionId(request: ClaudeRequest): void {
+    if (request.executionMode !== "print") {
+        throw new InvalidClaudeRequestError(
+            "Session ID 는 Print 모드에서만 정할 수 있습니다",
+        );
+    }
+    if (request.resumeSessionId !== undefined) {
+        throw new InvalidClaudeRequestError(
+            "Session ID 와 Resume Session ID 는 같이 쓸 수 없습니다",
         );
     }
 }
@@ -151,6 +168,10 @@ export function buildWakeCommand(
 export function buildClaudeCommand(request: ClaudeRequest): ClaudeCommand {
     if (request.resumeSessionId !== undefined) {
         assertValidSessionId(request.resumeSessionId);
+    }
+    if (request.sessionId !== undefined) {
+        assertValidSessionId(request.sessionId);
+        assertCanPresetSessionId(request);
     }
     if (request.jsonSchema) assertValidJsonSchema(request.jsonSchema);
 

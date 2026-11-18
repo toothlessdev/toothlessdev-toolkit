@@ -24,6 +24,37 @@ function readOption(
 }
 
 describe("buildClaudeCommand", () => {
+    describe("Session ID 를 미리 정할 때", () => {
+        const SESSION_ID = "11111111-1111-4111-8111-111111111111";
+
+        test("--session-id 로 넘긴다", () => {
+            const { commandLineArguments } = buildClaudeCommand({
+                ...request,
+                sessionId: SESSION_ID,
+            });
+
+            expect(readOption(commandLineArguments, "--session-id")).toBe(
+                SESSION_ID,
+            );
+        });
+
+        test.each([
+            ["UUID 가 아닌 값", { sessionId: "not-a-uuid" }],
+            [
+                "Background 모드",
+                { sessionId: SESSION_ID, executionMode: "background" as const },
+            ],
+            [
+                "Resume Session ID 와 함께",
+                { sessionId: SESSION_ID, resumeSessionId: SESSION_ID },
+            ],
+        ])("%s 이면 거절한다", (_name, overrides) => {
+            expect(() =>
+                buildClaudeCommand({ ...request, ...overrides }),
+            ).toThrow(InvalidClaudeRequestError);
+        });
+    });
+
     test("* 는 전체 도구를 뜻하는 default 로 넘긴다", () => {
         const { commandLineArguments } = buildClaudeCommand({
             ...request,

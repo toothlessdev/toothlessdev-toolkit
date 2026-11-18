@@ -17,6 +17,56 @@ const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 /** claude --bg 는 JSON 출력이 없어서 사람이 읽는 첫 줄에서 ID 를 뽑습니다. */
 const BACKGROUND_ID_PATTERN = /^backgrounded · ([0-9a-f]+)/m;
 
+const SESSION_ID_OPTIONS = ["--resume", "--session-id"];
+
+/**
+ * n8n 은 노드 패키지마다 이 모듈을 따로 불러서 모듈 변수는 패키지끼리 공유되지 않습니다.
+ * 그래서 대기열을 globalThis 에 둡니다.
+ */
+const SESSION_QUEUES_KEY = Symbol.for("claude-cli.sessionQueues");
+
+function sessionQueues(): Map<string, Promise<void>> {
+    const holder = globalThis as {
+        [SESSION_QUEUES_KEY]?: Map<string, Promise<void>>;
+    };
+    holder[SESSION_QUEUES_KEY] ??= new Map();
+
+    return holder[SESSION_QUEUES_KEY];
+}
+
+function readSessionId(command: ClaudeCommand): string | undefined {
+    for (const option of SESSION_ID_OPTIONS) {
+        const index = command.commandLineArguments.indexOf(option);
+        if (index !== -1) return command.commandLineArguments[index + 1];
+    }
+
+    return undefined;
+}
+
+/**
+ * 같은 세션을 두 프로세스가 동시에 이어 가면 뒤 실행이 앞 실행의 결과를 보지 못한 채 답합니다.
+ * 앞 실행이 끝날 때까지 기다렸다가 시작합니다. 앞 실행이 실패해도 뒤 실행은 진행합니다.
+ */
+function runInSessionOrder<Result>(
+    sessionId: string,
+    task: () => Promise<Result>,
+): Promise<Result> {
+    const queues = sessionQueues();
+    const previous = queues.get(sessionId) ?? Promise.resolve();
+
+    const result = previous.then(task);
+    const settled = result.then(
+        () => undefined,
+        () => undefined,
+    );
+    queues.set(sessionId, settled);
+    void settled.then(() => {
+        if (queues.get(sessionId) === settled) queues.delete(sessionId);
+    });
+
+    return result;
+}
+
 type ExecFailure = ExecFileException & { stdout?: string; stderr?: string };
 
 export interface ClaudeResult {
@@ -89,14 +139,19 @@ export class ClaudeCli {
         workingDirectory: string,
         cancelSignal?: AbortSignal,
     ): Promise<ClaudeResult> {
-        const output = await this.execute(
-            command,
-            workingDirectory,
-            cancelSignal,
-        );
-        this.assertSucceeded(output);
+        const runOnce = async () => {
+            const output = await this.execute(
+                command,
+                workingDirectory,
+                cancelSignal,
+            );
+            this.assertSucceeded(output);
 
-        return this.interpret(output, command);
+            return this.interpret(output, command);
+        };
+
+        const sessionId = readSessionId(command);
+        return sessionId ? runInSessionOrder(sessionId, runOnce) : runOnce();
     }
 
     /**

@@ -14,6 +14,11 @@ import {
 } from "../src/routing/SessionMatchRule";
 import { SessionRouter } from "../src/routing/SessionRouter";
 import { ConversationSessionStore } from "../src/store/ConversationSessionStore";
+import {
+    mergePrintSessions,
+    PrintSessionStore,
+    type PrintSession,
+} from "../src/store/PrintSessionStore";
 
 const NOW_MS = 1_000_000_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -312,6 +317,18 @@ describe("resolveWakeTarget", () => {
         expect(resolveWakeTarget([ended], "s1", WORKING_DIRECTORY)).toBe(ended);
     });
 
+    test("기록해 둔 -p 세션을 돌려준다", () => {
+        const printSession = session("s1", {
+            pid: undefined,
+            isBackground: false,
+            isPrint: true,
+        });
+
+        expect(resolveWakeTarget([printSession], "s1", WORKING_DIRECTORY)).toBe(
+            printSession,
+        );
+    });
+
     test.each([
         ["없는 세션", []],
         ["살아 있는 세션", [session("s1")]],
@@ -401,5 +418,117 @@ describe("ConversationSessionStore", () => {
         expect(store.find("oldest")).toBeUndefined();
         expect(store.find("touched")).toBe("b2");
         expect(store.find("newest")).toBe("d");
+    });
+});
+
+describe("Print 모드 세션", () => {
+    function printSession(
+        id: string,
+        overrides: Partial<PrintSession> = {},
+    ): PrintSession {
+        return {
+            sessionId: id,
+            name: `세션 ${id}`,
+            intent: "주문 생성 실패율 알림",
+            workingDirectory: WORKING_DIRECTORY,
+            startedAtMs: NOW_MS - 1000,
+            ...overrides,
+        };
+    }
+
+    function createResumingRouter(sessions: ClaudeSession[]) {
+        return new SessionRouter(
+            [
+                new ConversationBindingRule(store, {
+                    workingDirectory: WORKING_DIRECTORY,
+                }),
+                new SessionMatchRule(
+                    { match },
+                    { ...criteria, shouldIncludeEndedSessions: true },
+                ),
+            ],
+            async () => sessions,
+        );
+    }
+
+    test("대화에 연결된 세션은 프로세스가 없어도 resume 으로 판정한다", async () => {
+        store.remember(CONVERSATION_KEY, "p1");
+
+        const decision = await createResumingRouter(
+            mergePrintSessions([], [printSession("p1")]),
+        ).route(message);
+
+        expect(decision).toMatchObject({ action: "resume", sessionId: "p1" });
+        expect(match).not.toHaveBeenCalled();
+    });
+
+    test("LLM 이 고른 세션을 resume 으로 판정한다", async () => {
+        match.mockResolvedValue({
+            sessionId: "p1",
+            confidence: "high",
+            reason: "같은 알림",
+        });
+
+        const decision = await createResumingRouter(
+            mergePrintSessions([], [printSession("p1")]),
+        ).route(message);
+
+        expect(decision).toMatchObject({ action: "resume", sessionId: "p1" });
+    });
+
+    test("끝난 세션 이어 가기를 끄면 후보로 보지 않는다", () => {
+        const candidates = selectCandidates(
+            mergePrintSessions([], [printSession("p1")]),
+            criteria,
+        );
+
+        expect(candidates).toEqual([]);
+    });
+
+    test("사람이 Desktop 에서 열어 둔 세션은 후보에서 뺀다", () => {
+        const opened = session("p1", { isBackground: false });
+
+        expect(mergePrintSessions([opened], [printSession("p1")])).toEqual([
+            opened,
+        ]);
+    });
+
+    test("프로세스가 없는 같은 ID 의 항목은 기록해 둔 세션으로 바꾼다", () => {
+        const closed = session("p1", { isBackground: false, pid: undefined });
+
+        const merged = mergePrintSessions([closed], [printSession("p1")]);
+
+        expect(merged).toHaveLength(1);
+        expect(merged[0]).toMatchObject({ sessionId: "p1", isPrint: true });
+    });
+
+    describe("PrintSessionStore", () => {
+        test("다시 등록해도 처음 시작한 시각과 메시지를 그대로 둔다", () => {
+            const printStore = new PrintSessionStore(
+                path.join(directory, "print.json"),
+            );
+
+            printStore.register(printSession("p1"));
+            printStore.register(
+                printSession("p1", {
+                    intent: "다른 알림",
+                    startedAtMs: NOW_MS,
+                }),
+            );
+
+            expect(printStore.list()).toEqual([printSession("p1")]);
+        });
+
+        test("시작 메시지는 앞 500자만 둔다", () => {
+            const printStore = new PrintSessionStore(
+                path.join(directory, "print.json"),
+            );
+
+            printStore.register(
+                printSession("p1", { intent: "가".repeat(600) }),
+            );
+
+            expect(printStore.list()[0].intent).toHaveLength(500);
+        });
     });
 });

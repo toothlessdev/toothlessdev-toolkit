@@ -26,8 +26,17 @@ import { resolveWakeTarget } from "../../claude/resolveWakeTarget";
 import { ConversationBindingRule } from "../../routing/ConversationBindingRule";
 import { SessionMatchRule } from "../../routing/SessionMatchRule";
 import { SessionRouter } from "../../routing/SessionRouter";
+import {
+    renderSessionNotification,
+    type NotificationDisplayStatus,
+    type NotificationRouting,
+} from "../../notification/sessionNotificationText";
 import { syncSessionNotifications } from "../../notification/syncSessionNotifications";
 import { ConversationSessionStore } from "../../store/ConversationSessionStore";
+import {
+    mergePrintSessions,
+    PrintSessionStore,
+} from "../../store/PrintSessionStore";
 import {
     SessionNotificationStore,
     type NotificationStatus,
@@ -44,6 +53,7 @@ interface ClaudeRouterOptions {
     timeoutSeconds?: number;
     storePath?: string;
     notificationStorePath?: string;
+    printSessionStorePath?: string;
     stopGraceSeconds?: number;
 }
 
@@ -79,6 +89,14 @@ function createNotificationStore(
     );
 }
 
+function createPrintSessionStore(
+    options: ClaudeRouterOptions,
+): PrintSessionStore {
+    return new PrintSessionStore(
+        options.printSessionStorePath || routerDataPath("print-sessions.json"),
+    );
+}
+
 function createCli(options: ClaudeRouterOptions): ClaudeCli {
     return new ClaudeCli(
         options.executable || DEFAULT_EXECUTABLE,
@@ -98,6 +116,21 @@ function listSessions(
         jobsDirectory: path.join(homedir(), ".claude", "jobs"),
         cancelSignal,
     });
+}
+
+/**
+ * Route 와 Wake 는 기록해 둔 -p 세션도 봅니다. -p 세션을 Wake 로 깨우면 같은 ID 의 백그라운드 세션이 됩니다.
+ * Deliver 와 Sync 는 프로세스가 있는 세션만 다룹니다.
+ */
+async function listRoutableSessions(
+    options: ClaudeRouterOptions,
+    workingDirectory: string,
+    cancelSignal?: AbortSignal,
+): Promise<ClaudeSession[]> {
+    return mergePrintSessions(
+        await listSessions(options, workingDirectory, cancelSignal),
+        createPrintSessionStore(options).list(),
+    );
 }
 
 function createRouter(
@@ -130,7 +163,8 @@ function createRouter(
                 shouldIncludeEndedSessions: options.shouldIncludeEndedSessions,
             }),
         ],
-        (cancelSignal) => listSessions(options, workingDirectory, cancelSignal),
+        (cancelSignal) =>
+            listRoutableSessions(options, workingDirectory, cancelSignal),
     );
 }
 
@@ -225,7 +259,7 @@ async function wakeItem(
 
     // 라우팅 뒤에 세션이 다시 떴거나 사람이 열었을 수 있어 깨우기 직전에 다시 찾습니다.
     resolveWakeTarget(
-        await listSessions(options, workingDirectory, cancelSignal),
+        await listRoutableSessions(options, workingDirectory, cancelSignal),
         sessionId,
         workingDirectory,
     );
@@ -246,6 +280,7 @@ function rememberItem(
     context: IExecuteFunctions,
     itemIndex: number,
     store: ConversationSessionStore,
+    options: ClaudeRouterOptions,
 ): IDataObject {
     const conversationKey = context.getNodeParameter(
         "conversationKey",
@@ -256,6 +291,32 @@ function rememberItem(
         itemIndex,
     ) as string;
     store.remember(conversationKey, sessionId);
+
+    const shouldRegisterPrintSession = context.getNodeParameter(
+        "shouldRegisterPrintSession",
+        itemIndex,
+        false,
+    ) as boolean;
+    if (shouldRegisterPrintSession) {
+        createPrintSessionStore(options).register({
+            sessionId,
+            name: context.getNodeParameter(
+                "printSessionName",
+                itemIndex,
+                "",
+            ) as string,
+            intent: context.getNodeParameter(
+                "printSessionIntent",
+                itemIndex,
+                "",
+            ) as string,
+            workingDirectory: context.getNodeParameter(
+                "printSessionWorkingDirectory",
+                itemIndex,
+            ) as string,
+            startedAtMs: Date.now(),
+        });
+    }
 
     return { conversationKey, sessionId };
 }
@@ -274,10 +335,63 @@ function trackNotificationItem(
             "status",
             itemIndex,
         ) as NotificationStatus,
+        remoteControlSessionId:
+            (context.getNodeParameter(
+                "remoteControlSessionId",
+                itemIndex,
+                "",
+            ) as string) || undefined,
     };
     createNotificationStore(options).upsert(notification);
 
     return { ...notification };
+}
+
+function renderNotificationItem(
+    context: IExecuteFunctions,
+    itemIndex: number,
+): IDataObject {
+    const routing = context.getNodeParameter(
+        "notificationRouting",
+        itemIndex,
+        "none",
+    ) as NotificationRouting | "none";
+
+    const rendered = renderSessionNotification({
+        status: context.getNodeParameter(
+            "notificationStatus",
+            itemIndex,
+        ) as NotificationDisplayStatus,
+        sourceText: context.getNodeParameter("sourceText", itemIndex) as string,
+        sourceUrl: context.getNodeParameter("sourceUrl", itemIndex) as string,
+        workflowName: context.getNodeParameter(
+            "workflowName",
+            itemIndex,
+        ) as string,
+        executionUrl: context.getNodeParameter(
+            "executionUrl",
+            itemIndex,
+            "",
+        ) as string,
+        routing: routing === "none" ? undefined : routing,
+        sessionId: context.getNodeParameter(
+            "notificationSessionId",
+            itemIndex,
+            "",
+        ) as string,
+        workingDirectory: context.getNodeParameter(
+            "workingDirectory",
+            itemIndex,
+            "",
+        ) as string,
+        shouldShowDesktopButton: context.getNodeParameter(
+            "shouldShowDesktopButton",
+            itemIndex,
+            true,
+        ) as boolean,
+    });
+
+    return { ...rendered };
 }
 
 async function syncNotificationsItem(
@@ -306,6 +420,13 @@ async function syncNotificationsItem(
             (options.stopGraceSeconds ?? DEFAULT_STOP_GRACE_SECONDS) *
             MS_PER_SECOND,
         nowMs: Date.now,
+        workingDirectory,
+        mentionUserId:
+            (context.getNodeParameter(
+                "mentionUserId",
+                itemIndex,
+                "",
+            ) as string) || undefined,
         onStopFailed: (session, error) =>
             context.logger.warn(
                 `Claude Router: stop 실패 session=${session.sessionId}: ${error.message}`,
@@ -331,6 +452,9 @@ async function runOperation(
     if (operation === "wake") {
         return wakeItem(context, itemIndex, options);
     }
+    if (operation === "renderNotification") {
+        return renderNotificationItem(context, itemIndex);
+    }
     if (operation === "trackNotification") {
         return trackNotificationItem(context, itemIndex, options);
     }
@@ -338,7 +462,7 @@ async function runOperation(
         return syncNotificationsItem(context, itemIndex, options);
     }
 
-    return rememberItem(context, itemIndex, store);
+    return rememberItem(context, itemIndex, store, options);
 }
 
 /** n8n 은 파일 이름으로 클래스를 찾으므로 클래스 이름을 ClaudeRouter 로 유지해야 합니다. */
@@ -383,6 +507,12 @@ export class ClaudeRouter implements INodeType {
                         name: "Remember",
                         value: "remember",
                         description: "대화와 새로 띄운 세션을 연결합니다",
+                    },
+                    {
+                        name: "Render Notification",
+                        value: "renderNotification",
+                        description:
+                            "세션 알림 메시지 본문을 만듭니다. Slack 노드에서 routing.text 로 보냅니다.",
                     },
                     {
                         name: "Track Notification",
@@ -465,6 +595,121 @@ export class ClaudeRouter implements INodeType {
                 },
             },
             {
+                displayName: "Mention User ID",
+                name: "mentionUserId",
+                type: "string",
+                default: "",
+                placeholder: "U0123456789",
+                description:
+                    "확인 필요, 완료, 실패로 바뀔 때 만드는 스레드 답글(routing.threadReplyText)에서 멘션할 Slack 사용자 ID. 비우면 멘션 없이 만듭니다.",
+                displayOptions: {
+                    show: { operation: ["syncNotifications"] },
+                },
+            },
+            {
+                displayName: "Status",
+                name: "notificationStatus",
+                type: "options",
+                default: "working",
+                options: [
+                    { name: "Working", value: "working" },
+                    { name: "Blocked", value: "blocked" },
+                    {
+                        name: "Done",
+                        value: "doneStopped",
+                        description:
+                            "Print 모드로 실행한 세션이 끝났을 때 워크플로에서 직접 씁니다",
+                    },
+                    { name: "Failed", value: "failed" },
+                    {
+                        name: "Rejected",
+                        value: "rejected",
+                        description: "세션으로 보내지 않은 메시지",
+                    },
+                ],
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Source Text",
+                name: "sourceText",
+                type: "string",
+                typeOptions: { rows: 2 },
+                default: "={{ $json.text }}",
+                description:
+                    "제목으로 쓸 원본 메시지. 첫 줄만 쓰고 멘션과 서식 기호는 지웁니다.",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Source URL",
+                name: "sourceUrl",
+                type: "string",
+                required: true,
+                default: "={{ $json.permalink }}",
+                description: "원본 메시지 링크",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Workflow Name",
+                name: "workflowName",
+                type: "string",
+                required: true,
+                default: "={{ $workflow.name }}",
+                description: "Triggered via 줄에 보일 이름",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Execution URL",
+                name: "executionUrl",
+                type: "string",
+                default: "",
+                placeholder:
+                    "=http://localhost:5678/workflow/{{ $workflow.id }}/executions/{{ $execution.id }}",
+                description:
+                    "워크플로 이름에 걸 n8n 실행 화면 주소. 비우면 이름만 씁니다.",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Routing",
+                name: "notificationRouting",
+                type: "options",
+                default: "new",
+                options: [
+                    { name: "New Session", value: "new" },
+                    { name: "Delivered", value: "delivered" },
+                    { name: "Resumed", value: "resumed" },
+                    { name: "None", value: "none" },
+                ],
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Session ID",
+                name: "notificationSessionId",
+                type: "string",
+                default: "={{ $json.routing.sessionId }}",
+                description:
+                    "알림이 가리키는 세션. 비우면 Claude Desktop 링크를 넣지 않습니다.",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Working Directory",
+                name: "workingDirectory",
+                type: "string",
+                default: "",
+                placeholder: "/Users/me/project",
+                description:
+                    "Claude Desktop 링크가 열 폴더. 세션을 시작한 Claude CLI 노드와 같은 절대 경로를 넣습니다.",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
+                displayName: "Show Desktop Button",
+                name: "shouldShowDesktopButton",
+                type: "boolean",
+                default: true,
+                description:
+                    "끄면 Session ID 가 있어도 Claude Desktop 버튼을 붙이지 않습니다. Print 모드 세션이 실행 중일 때 끕니다.",
+                displayOptions: { show: { operation: ["renderNotification"] } },
+            },
+            {
                 displayName: "Session ID",
                 name: "sessionId",
                 type: "string",
@@ -498,7 +743,7 @@ export class ClaudeRouter implements INodeType {
                 required: true,
                 default: "={{ $json.message.text }}",
                 description:
-                    "알림 메시지 본문. 상태 이모지를 앞에 바꿔 넣습니다.",
+                    "Render Notification 의 routing.text. 상태가 바뀌면 맨 앞 상태 원과 Status 줄을 바꿉니다.",
                 displayOptions: { show: { operation: ["trackNotification"] } },
             },
             {
@@ -509,9 +754,21 @@ export class ClaudeRouter implements INodeType {
                 options: [
                     { name: "Working", value: "working" },
                     { name: "Blocked", value: "blocked" },
-                    { name: "Done", value: "done" },
+                    { name: "Done (Process Running)", value: "doneRunning" },
+                    { name: "Done (Process Stopped)", value: "doneStopped" },
+                    { name: "Taken Over", value: "takenOver" },
+                    { name: "Failed", value: "failed" },
                 ],
                 description: "지금 메시지에 표시된 상태",
+                displayOptions: { show: { operation: ["trackNotification"] } },
+            },
+            {
+                displayName: "Remote Control Session ID",
+                name: "remoteControlSessionId",
+                type: "string",
+                default: "",
+                description:
+                    "지금 메시지 버튼이 여는 Remote Control 세션. Sync Notifications 결과의 routing.remoteControlSessionId 를 넣습니다. 처음 보낸 알림은 비웁니다.",
                 displayOptions: { show: { operation: ["trackNotification"] } },
             },
             {
@@ -531,6 +788,59 @@ export class ClaudeRouter implements INodeType {
                 default: "={{ $json.sessionId }}",
                 description: "Claude CLI 노드가 돌려준 sessionId",
                 displayOptions: { show: { operation: ["remember"] } },
+            },
+            {
+                displayName: "Register Print Session",
+                name: "shouldRegisterPrintSession",
+                type: "boolean",
+                default: false,
+                description:
+                    "Claude CLI 노드의 Print 모드로 실행하는 세션이면 켭니다. 켜야 Route 가 이 세션을 이어 갈 후보로 찾습니다.",
+                displayOptions: { show: { operation: ["remember"] } },
+            },
+            {
+                displayName: "Session Name",
+                name: "printSessionName",
+                type: "string",
+                default: "",
+                description: "세션을 고르는 LLM 에게 보여 줄 이름",
+                displayOptions: {
+                    show: {
+                        operation: ["remember"],
+                        shouldRegisterPrintSession: [true],
+                    },
+                },
+            },
+            {
+                displayName: "Session Intent",
+                name: "printSessionIntent",
+                type: "string",
+                typeOptions: { rows: 2 },
+                default: "",
+                description:
+                    "세션을 시작한 메시지. 세션을 고르는 LLM 이 다음 메시지와 비교합니다.",
+                displayOptions: {
+                    show: {
+                        operation: ["remember"],
+                        shouldRegisterPrintSession: [true],
+                    },
+                },
+            },
+            {
+                displayName: "Session Working Directory",
+                name: "printSessionWorkingDirectory",
+                type: "string",
+                required: true,
+                default: "",
+                placeholder: "/Users/me/project",
+                description:
+                    "세션을 실행하는 Claude CLI 노드와 같은 절대 경로. Route 는 같은 폴더의 세션만 후보로 봅니다.",
+                displayOptions: {
+                    show: {
+                        operation: ["remember"],
+                        shouldRegisterPrintSession: [true],
+                    },
+                },
             },
             {
                 displayName: "Options",
@@ -611,6 +921,14 @@ export class ClaudeRouter implements INodeType {
                         default: "",
                         description:
                             "추적할 알림을 저장할 파일. 비우면 ~/.n8n/claude-router/session-notifications.json 입니다.",
+                    },
+                    {
+                        displayName: "Print Session Store Path",
+                        name: "printSessionStorePath",
+                        type: "string",
+                        default: "",
+                        description:
+                            "Print 모드 세션을 기록할 파일. 비우면 ~/.n8n/claude-router/print-sessions.json 입니다. Route 와 Remember 에 같은 값을 넣습니다.",
                     },
                     {
                         displayName: "Stop Grace (Seconds)",

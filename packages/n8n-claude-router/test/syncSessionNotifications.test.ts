@@ -5,10 +5,7 @@ import path from "node:path";
 import type { ClaudeSession } from "claude-cli";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import {
-    syncSessionNotifications,
-    withStatusEmoji,
-} from "../src/notification/syncSessionNotifications";
+import { syncSessionNotifications } from "../src/notification/syncSessionNotifications";
 import {
     SessionNotificationStore,
     type SessionNotification,
@@ -16,8 +13,8 @@ import {
 
 const MINUTE_MS = 60_000;
 const GRACE_MS = 10 * MINUTE_MS;
-const HOURGLASS = ":hourglass_flowing_sand:";
-const CHECK = ":white_check_mark:";
+const WORKING = ":large_yellow_circle:";
+const DONE = ":large_green_circle:";
 
 let directory: string;
 let store: SessionNotificationStore;
@@ -56,13 +53,13 @@ function notification(
         sessionId: "s1",
         channel: "C1",
         ts: "1.1",
-        text: `${HOURGLASS} 세션을 시작했습니다`,
+        text: `${WORKING} 세션을 시작했습니다`,
         status: "working",
         ...overrides,
     };
 }
 
-function sync() {
+function sync(mentionUserId?: string) {
     return syncSessionNotifications({
         store,
         listSessions,
@@ -70,6 +67,8 @@ function sync() {
         stopGraceMs: GRACE_MS,
         nowMs: () => nowMs,
         onStopFailed,
+        workingDirectory: "/work",
+        mentionUserId,
     });
 }
 
@@ -100,33 +99,207 @@ describe("syncSessionNotifications", () => {
     });
 
     test.each([
-        ["done", CHECK, "done"],
-        ["blocked", ":raised_hand:", "blocked"],
+        ["done", DONE, "doneRunning", "완료"],
+        ["blocked", ":large_orange_circle:", "blocked", "확인 필요"],
+        ["failed", ":red_circle:", "failed", "실패"],
     ])(
-        "세션이 %s 면 이모지를 바꾼 본문을 돌려준다",
-        async (state, emoji, status) => {
+        "세션이 %s 면 이모지를 바꾼 본문과 블록, 상태 답글을 돌려준다",
+        async (state, emoji, status, label) => {
             store.upsert(notification());
             sessions = [session(state)];
 
+            const text = `${emoji} 세션을 시작했습니다`;
             await expect(sync()).resolves.toEqual([
                 {
                     sessionId: "s1",
                     channel: "C1",
                     ts: "1.1",
-                    text: `${emoji} 세션을 시작했습니다`,
+                    text,
+                    blocks: JSON.stringify({
+                        blocks: [
+                            { type: "section", text: { type: "mrkdwn", text } },
+                        ],
+                    }),
+                    fallbackText: "세션을 시작했습니다",
                     status,
+                    threadReplyText: `${emoji} *${label}*`,
                 },
             ]);
         },
     );
 
-    test("done 알림의 세션이 다시 working 이면 모래시계로 돌아간다", async () => {
-        store.upsert(notification({ status: "done", text: `${CHECK} 본문` }));
+    test("멈춘 done 세션과 사람이 넘겨받은 세션을 구분한다", async () => {
+        store.upsert(notification());
+        store.upsert(notification({ sessionId: "s2", ts: "2.2" }));
+        sessions = [
+            session("done", { pid: undefined }),
+            session("done", { sessionId: "s2", isBackground: false }),
+        ];
+
+        const changes = await sync();
+
+        expect(
+            changes.map(({ sessionId, status }) => [sessionId, status]),
+        ).toEqual([
+            ["s1", "doneStopped"],
+            ["s2", "takenOver"],
+        ]);
+    });
+
+    test("지금 형식 알림은 블록에 Claude Desktop 버튼을 다시 붙인다", async () => {
+        store.upsert(
+            notification({
+                text: `${WORKING} *제목*\n\n> :vertical_traffic_light: *Status:* 진행 중 (Claude 조사 중)`,
+            }),
+        );
+        sessions = [session("done")];
+
+        const [change] = await sync();
+        const blocks = JSON.parse(change.blocks).blocks;
+
+        expect(blocks[1].elements[0].url).toBe(
+            "claude://resume?session=s1&cwd=%2Fwork",
+        );
+    });
+
+    describe("스레드 답글", () => {
+        test("확인 필요로 바뀌면 멘션과 세션이 묻는 내용을 담는다", async () => {
+            store.upsert(notification());
+            sessions = [
+                session("blocked", {
+                    needs: "범위를 정해 주세요",
+                    detail: "불일치 3곳",
+                }),
+            ];
+
+            const [change] = await sync("U1");
+
+            expect(change.threadReplyText).toBe(
+                "<@U1> :large_orange_circle: *확인 필요*\n> 범위를 정해 주세요",
+            );
+        });
+
+        test("완료와 실패로 바뀌면 진행 상황 한 줄을 담는다", async () => {
+            store.upsert(notification());
+            store.upsert(notification({ sessionId: "s2", ts: "2.2" }));
+            sessions = [
+                session("done", { detail: "정리 끝" }),
+                session("failed", { sessionId: "s2", detail: "권한 없음" }),
+            ];
+
+            const changes = await sync("U1");
+
+            expect(
+                changes.map(({ threadReplyText }) => threadReplyText),
+            ).toEqual([
+                "<@U1> :large_green_circle: *완료*\n> 정리 끝",
+                "<@U1> :red_circle: *실패*\n> 권한 없음",
+            ]);
+        });
+
+        test.each([
+            ["진행 중으로 바뀔 때", "blocked", session("working")],
+            [
+                "완료 세션의 프로세스가 멈출 때",
+                "doneRunning",
+                session("done", { pid: undefined }),
+            ],
+            [
+                "넘겨받은 세션이 끝날 때",
+                "takenOver",
+                session("done", { pid: undefined }),
+            ],
+        ] as const)(
+            "%s 는 답글을 만들지 않는다",
+            async (_, previous, current) => {
+                store.upsert(notification({ status: previous }));
+                sessions = [current];
+
+                const [change] = await sync("U1");
+
+                expect(change.threadReplyText).toBeUndefined();
+            },
+        );
+
+        test("세션이 쓴 글의 멘션과 링크는 이스케이프한다", async () => {
+            store.upsert(notification());
+            sessions = [session("done", { detail: "<!channel> <@U9> 끝" })];
+
+            const [change] = await sync();
+
+            expect(change.threadReplyText).toBe(
+                ":large_green_circle: *완료*\n> &lt;!channel&gt; &lt;@U9&gt; 끝",
+            );
+        });
+    });
+
+    describe("버튼 주소", () => {
+        const currentFormatText = `${WORKING} *제목*\n\n> :vertical_traffic_light: *Status:* 진행 중 (Claude 조사 중)`;
+
+        function buttonUrl(blocks: string): string {
+            return JSON.parse(blocks).blocks[1].elements[0].url;
+        }
+
+        test("실행 중인 Remote Control 세션은 상태가 그대로여도 claude://code 로 바꾼다", async () => {
+            store.upsert(notification({ text: currentFormatText }));
+            sessions = [
+                session("working", { remoteControlSessionId: "cse_abc" }),
+            ];
+
+            const [change] = await sync();
+
+            expect(change.status).toBe("working");
+            expect(change.remoteControlSessionId).toBe("cse_abc");
+            expect(buttonUrl(change.blocks)).toBe("claude://code/session_abc");
+        });
+
+        test("이미 Remote Control 주소로 바꾼 알림은 다시 고치지 않는다", async () => {
+            store.upsert(
+                notification({
+                    text: currentFormatText,
+                    remoteControlSessionId: "cse_abc",
+                }),
+            );
+            sessions = [
+                session("working", { remoteControlSessionId: "cse_abc" }),
+            ];
+
+            await expect(sync()).resolves.toEqual([]);
+        });
+
+        test("프로세스가 멈추면 claude://resume 으로 되돌린다", async () => {
+            store.upsert(
+                notification({
+                    text: currentFormatText,
+                    status: "doneStopped",
+                    remoteControlSessionId: "cse_abc",
+                }),
+            );
+            sessions = [
+                session("done", {
+                    pid: undefined,
+                    remoteControlSessionId: "cse_abc",
+                }),
+            ];
+
+            const [change] = await sync();
+
+            expect(change.remoteControlSessionId).toBeUndefined();
+            expect(buttonUrl(change.blocks)).toBe(
+                "claude://resume?session=s1&cwd=%2Fwork",
+            );
+        });
+    });
+
+    test("done 알림의 세션이 다시 working 이면 진행 중으로 돌아간다", async () => {
+        store.upsert(
+            notification({ status: "doneRunning", text: `${DONE} 본문` }),
+        );
         sessions = [session("working")];
 
         const [change] = await sync();
 
-        expect(change?.text).toBe(`${HOURGLASS} 본문`);
+        expect(change?.text).toBe(`${WORKING} 본문`);
     });
 
     test("호출부가 status 를 저장하기 전에는 같은 변경을 다시 돌려준다", async () => {
@@ -143,17 +316,17 @@ describe("syncSessionNotifications", () => {
             "프로세스 없이 working 인 세션",
             [session("working", { pid: undefined })],
         ],
-    ])("%s 는 done 으로 표시한다", async (_, listed) => {
+    ])("%s 는 정리된 done 으로 표시한다", async (_, listed) => {
         store.upsert(notification());
         sessions = listed;
 
         const [change] = await sync();
 
-        expect(change?.status).toBe("done");
+        expect(change?.status).toBe("doneStopped");
     });
 
     test("표시가 맞고 프로세스도 끝난 알림은 추적에서 뺀다", async () => {
-        store.upsert(notification({ status: "done" }));
+        store.upsert(notification({ status: "doneStopped" }));
         sessions = [session("done", { pid: undefined })];
 
         await sync();
@@ -254,38 +427,24 @@ describe("syncSessionNotifications", () => {
     });
 });
 
-describe("withStatusEmoji", () => {
-    test("상태 이모지가 없는 본문에는 앞에 붙인다", () => {
-        expect(withStatusEmoji(":repeat: 본문", "working")).toBe(
-            `${HOURGLASS} :repeat: 본문`,
-        );
-    });
-
-    test("맨 앞 상태 이모지만 바꾸고 본문의 같은 글자는 건드리지 않는다", () => {
-        expect(withStatusEmoji(`${HOURGLASS} 본문 ${HOURGLASS}`, "done")).toBe(
-            `${CHECK} 본문 ${HOURGLASS}`,
-        );
-    });
-});
-
 describe("SessionNotificationStore", () => {
     test("같은 메시지는 덮어쓰고 다른 메시지는 따로 둔다", () => {
         store.upsert(notification());
-        store.upsert(notification({ status: "done" }));
+        store.upsert(notification({ status: "doneStopped" }));
         store.upsert(notification({ ts: "2.2" }));
 
         expect(store.list().map(({ ts, status }) => [ts, status])).toEqual([
-            ["1.1", "done"],
+            ["1.1", "doneStopped"],
             ["2.2", "working"],
         ]);
     });
 
     test("표시 상태를 저장해도 대기 시작 시각은 유지한다", () => {
         store.upsert(notification({ doneSinceMs: 123 }));
-        store.upsert(notification({ status: "done" }));
+        store.upsert(notification({ status: "doneStopped" }));
 
         expect(store.list()[0]).toMatchObject({
-            status: "done",
+            status: "doneStopped",
             doneSinceMs: 123,
         });
     });

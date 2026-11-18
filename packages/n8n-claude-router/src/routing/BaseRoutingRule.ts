@@ -45,7 +45,9 @@ export function canReceiveMessage(session: ClaudeSession): boolean {
     return session.isBackground && session.pid !== undefined;
 }
 
-/** 프로세스가 끝난 백그라운드 세션은 메시지를 받지 못하지만 --resume 으로 다시 띄울 수 있습니다. */
+/** 프로세스가 끝난 백그라운드 세션과 -p 세션은 메시지를 받지 못하지만 --resume 으로 이어 갈 수 있습니다. */
 export function canResume(session: ClaudeSession): boolean {
+    if (session.isPrint) return true;
+
     return session.isBackground && session.pid === undefined;
 }

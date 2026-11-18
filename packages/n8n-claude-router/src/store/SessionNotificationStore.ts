@@ -3,7 +3,17 @@ import path from "node:path";
 
 const MAX_NOTIFICATIONS = 1000;
 
-export type NotificationStatus = "working" | "blocked" | "done";
+/**
+ * 알림에 보이는 세션 상태입니다. done 은 프로세스가 아직 살아 있는지(doneRunning),
+ * 멈췄는지(doneStopped), 사람이 Desktop 에서 넘겨받았는지(takenOver)로 나눕니다.
+ */
+export type NotificationStatus =
+    | "working"
+    | "blocked"
+    | "doneRunning"
+    | "doneStopped"
+    | "takenOver"
+    | "failed";
 
 export interface SessionNotification {
     readonly sessionId: string;
@@ -13,6 +23,8 @@ export interface SessionNotification {
     readonly status: NotificationStatus;
     /** 세션이 done 인 것을 처음 본 시각입니다. 이 시각부터 대기 시간을 잽니다. */
     readonly doneSinceMs?: number;
+    /** 알림 버튼이 지금 여는 Remote Control 세션입니다. 없으면 버튼은 claude://resume 으로 엽니다. */
+    readonly remoteControlSessionId?: string;
 }
 
 type StoredNotifications = Record<string, SessionNotification>;

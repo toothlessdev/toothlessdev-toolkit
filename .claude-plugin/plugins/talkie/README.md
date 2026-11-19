@@ -5,7 +5,7 @@
 ## 준비
 
 - [uv](https://docs.astral.sh/uv/): Python 의존성을 설치하고 스크립트를 실행합니다.
-- [ffmpeg](https://ffmpeg.org/): 합친 음성을 mp3 로 인코딩합니다.
+- [ffmpeg](https://ffmpeg.org/): 합친 음성을 mp3 로, 영상을 mp4 로 인코딩합니다.
 - Chrome 또는 Playwright Chromium: 재생과 탐색 결과를 비교합니다.
 
 Python 의존성은 첫 실행 때 `~/.cache/talkie/venv` 에 설치됩니다. 위치를 바꾸려면 `TALKIE_ENV_DIR` 을 지정합니다. Apple Silicon 이 아니면 Whisper 받아쓰기 검사는 건너뛰고 파형 검사만 합니다.
@@ -31,6 +31,7 @@ Claude Code 에서 덱 경로나 아티팩트 URL 을 넘깁니다.
 | `out/talkie.html` | 파일 하나로 재생됩니다 |
 | `out/hosted/` | 페이지와 mp3 를 나눕니다. 페이지 크기 제한이 있는 곳에 올릴 때 씁니다 |
 | `out/talkie-compact.html` | `build_deck.py --mode compact` 로 만듭니다. 음성을 모노 48kbps 로 줄인 파일 하나입니다 |
+| `out/talkie.mp4` | `/talkie:export` 로 만듭니다. 음성과 자막이 들어간 영상입니다 |
 
 ## 파이프라인
 
@@ -44,6 +45,7 @@ Claude Code 에서 덱 경로나 아티팩트 URL 을 넘깁니다.
 | 6 | `/talkie:voice` | 발음 | `voice/` | `render-audio` |
 | 7 | `/talkie:assemble` | 음성, 순서, 어댑터 | `timeline.json`, `out/` | `assemble-deck` |
 | 8 | `/talkie:inspect` | 결과 HTML | `inspect-report.json` | `assemble-deck` |
+| 9 | `/talkie:export` | 결과 HTML, 음성 | `out/talkie.mp4` | 메인 세션, 선택 |
 
 - `/talkie:talkie` 는 질문과 대본 승인을 맡고, 나머지는 메인 워크플로 `talkie:produce` 를 부릅니다.
 - 발음 변환과 합성, 어댑터 작성은 서로의 결과가 필요 없어서 동시에 돌고, 조립에서 합칩니다.

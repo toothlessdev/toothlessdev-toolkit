@@ -39,6 +39,7 @@ description: 발표 장표의 모핑과 설명용 애니메이션을 구현하�
 ## 발표자 진행
 
 - **장 이동은 `#s번호` 해시를 지원합니다.** 재생 확인 도구가 이 규칙으로 장을 엽니다. 장 수는 `window.DECK_STEP_COUNT` 로 알리고, 없으면 도구가 `.slide` 요소 수를 셉니다
+- **무대 크기는 `window.DECK_STAGE_SIZE = { width, height }` 로 알립니다.** 재생 확인 도구가 이 값으로 화면 크기를 맞춥니다. 페이지를 읽자마자 정해지도록 스크립트 맨 위에서 넣습니다. 없으면 도구는 1600x900 으로 봅니다
 - **입력**: `→`, 스페이스, 클릭은 다음 단계입니다. `←`, 화면 왼쪽 클릭은 이전 단계입니다
 - **단계가 남았으면 장을 넘기지 않습니다.** 마지막 단계 다음에야 다음 장으로 갑니다
 - **조작 UI를 화면에 두지 않습니다.** 노트, 전체 화면, 다시 재생은 키로 둡니다(`N`, `F`, `R`)
@@ -92,6 +93,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/capture.mjs <deck.html> <저장
 node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/capture.mjs deck.html shots '[{"slide":3,"at":[1500,6000]},{"slide":5,"keys":["ArrowRight","ArrowLeft"],"keyWaitMs":700},{"walk":30,"keyWaitMs":1500}]'
 ```
 
+- 화면 크기는 덱의 `window.DECK_STAGE_SIZE` 를 따릅니다. 세로 덱은 1080x1920 그대로 찍힙니다
 - 끝나면 찍은 사진을 모은 `contact.jpg` 를 만듭니다. 장 사이 밀도와 흐름은 이 한 장으로 먼저 봅니다
 - 실제 시간으로 재생하므로 덱 전체를 찍으면 몇 분 걸립니다. 백그라운드로 돌립니다
 - 스크립트 오류는 `errors` 로 출력되고, 있으면 종료 코드가 1입니다
@@ -108,6 +110,6 @@ UV_NATIVE_TLS=1 uv run ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/key_change.py
 
 - `--keys`: 누를 키 횟수입니다. 보통 덱의 전체 키 수입니다. 표지 전환은 값이 커도 무시합니다
 - `--wait-ms`: 키마다 움직임이 끝나기를 기다리는 시간입니다. 가장 긴 모핑보다 길게 둡니다. 실제 시간으로 재생하므로 덱 하나에 몇 분 걸립니다
-- `--clip x,y,w,h`: 잴 영역입니다. 기본값은 제목과 캡션을 뺀 1600x900 화면의 그림 영역입니다
+- `--clip x,y,w,h`: 잴 영역입니다. 기본값은 무대 높이의 위 약 14% (제목)와 아래 약 12% (캡션)를 뺀 그림 영역입니다. 무대 크기는 capture.mjs 와 같이 `window.DECK_STAGE_SIZE` 에서 읽습니다. 세로 덱처럼 제목이 길거나 아래를 자막 자리로 비웠으면 직접 지정합니다
 
 화면 전체에 걸치는 효과나 시뮬레이션 재시작도 수치를 올리므로, 수치는 합격선이 아니라 다시 볼 곳을 찾는 신호로 씁니다.

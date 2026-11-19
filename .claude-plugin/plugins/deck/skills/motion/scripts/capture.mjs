@@ -7,6 +7,7 @@
  * "slide":"all" 은 모든 장을 같은 시각에 찍습니다. 장 수는 window.DECK_STEP_COUNT, 없으면 .slide 개수입니다. 장 이동은 #s번호 해시를 씁니다.
  * {"walk":30,"keyWaitMs":1500} 은 1장부터 다음 키를 30번 누르며 단계마다 찍습니다. 키로 진행하는 덱의 뒷단계를 볼 때 씁니다.
  * "name" 을 주면 파일 이름 앞에 붙습니다. 같은 장을 두 번 찍을 때 씁니다.
+ * 화면 크기는 덱의 window.DECK_STAGE_SIZE 를 따르고, 없으면 1600x900 입니다.
  * 끝나면 찍은 사진을 한 장에 모은 contact.jpg 를 만듭니다.
  */
 import { spawn } from "node:child_process";
@@ -16,11 +17,12 @@ import path from "node:path";
 
 const CHROME_PATH =
     process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const VIEWPORT = { width: 1600, height: 900 };
+const DEFAULT_STAGE_SIZE = { width: 1600, height: 900 };
 const SLIDE_LOAD_WAIT_MS = 900;
 const DEFAULT_KEY_WAIT_MS = 700;
 const KEY_CODES = { ArrowRight: 39, ArrowLeft: 37, " ": 32, Enter: 13 };
-const CONTACT_COLUMN_COUNT = 5;
+const LANDSCAPE_CONTACT_COLUMN_COUNT = 5;
+const PORTRAIT_CONTACT_COLUMN_COUNT = 8;
 
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -138,7 +140,20 @@ async function runCapturePlan(send, deckUrl, outputDirectory, plan) {
     }
 }
 
-async function writeContactSheet(send, outputDirectory) {
+/** 덱이 window.DECK_STAGE_SIZE 로 알린 무대 크기를 읽습니다. 알리지 않은 덱은 1600x900 으로 봅니다. */
+async function readStageSize(send, deckUrl) {
+    await send("Page.navigate", { url: deckUrl });
+    await sleep(SLIDE_LOAD_WAIT_MS);
+    const response = await send("Runtime.evaluate", {
+        expression: "window.DECK_STAGE_SIZE ?? null",
+        returnByValue: true,
+    });
+    const stageSize = response.result.result.value;
+    if (!stageSize?.width || !stageSize?.height) return DEFAULT_STAGE_SIZE;
+    return { width: Math.round(stageSize.width), height: Math.round(stageSize.height) };
+}
+
+async function writeContactSheet(send, outputDirectory, contactColumnCount) {
     const shotNames = readdirSync(outputDirectory)
         .filter((name) => name.endsWith(".jpg") && name !== "contact.jpg")
         .sort();
@@ -151,7 +166,7 @@ async function writeContactSheet(send, outputDirectory) {
     writeFileSync(
         contactHtmlPath,
         `<!doctype html><meta charset="utf-8"><style>
-body{margin:0;padding:8px;background:#fff;font:12px sans-serif;display:grid;grid-template-columns:repeat(${CONTACT_COLUMN_COUNT},1fr);gap:8px}
+body{margin:0;padding:8px;background:#fff;font:12px sans-serif;display:grid;grid-template-columns:repeat(${contactColumnCount},1fr);gap:8px}
 figure{margin:0}img{width:100%;display:block;border:1px solid #ddd}
 </style>${cells}`,
     );
@@ -188,7 +203,7 @@ async function main() {
             "--headless=new",
             "--disable-gpu",
             "--hide-scrollbars",
-            `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
+            `--window-size=${DEFAULT_STAGE_SIZE.width},${DEFAULT_STAGE_SIZE.height}`,
             `--remote-debugging-port=${debugPort}`,
             `--user-data-dir=${profileDirectory}`,
             "about:blank",
@@ -204,15 +219,22 @@ async function main() {
 
         await send("Page.enable");
         await send("Runtime.enable");
+
+        const deckUrl = `file://${path.resolve(deckPath)}`;
+        const stageSize = await readStageSize(send, deckUrl);
         await send("Emulation.setDeviceMetricsOverride", {
-            ...VIEWPORT,
+            ...stageSize,
             deviceScaleFactor: 1,
             mobile: false,
         });
+        const isPortrait = stageSize.height > stageSize.width;
 
-        const deckUrl = `file://${path.resolve(deckPath)}`;
         await runCapturePlan(send, deckUrl, outputDirectory, JSON.parse(planJson));
-        await writeContactSheet(send, outputDirectory);
+        await writeContactSheet(
+            send,
+            outputDirectory,
+            isPortrait ? PORTRAIT_CONTACT_COLUMN_COUNT : LANDSCAPE_CONTACT_COLUMN_COUNT,
+        );
         socket.close();
     } finally {
         chrome.kill();

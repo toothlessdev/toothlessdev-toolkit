@@ -8,7 +8,7 @@
 
 ## 용어와 경로
 
-- **`${CLAUDE_PLUGIN_ROOT}`**: beaker 플러그인의 루트입니다. `references/`, `techniques/`, `scripts/`, `agents/` 경로는 모두 여기서부터 읽습니다. 호스트가 이 변수를 풀어 주지 않으면 `skills/beaker/SKILL.md` 의 두 단계 위 디렉터리입니다.
+- **`${CLAUDE_PLUGIN_ROOT}`**: beaker 플러그인의 루트입니다. `references/`, `skills/`, `scripts/`, `agents/` 경로는 모두 여기서부터 읽습니다. 호스트가 이 변수를 풀어 주지 않으면 `skills/beaker/SKILL.md` 의 두 단계 위 디렉터리입니다.
 - **서브에이전트**: 오케스트레이터의 대화 이력과 읽은 파일을 물려받지 않고, 역할 프롬프트와 payload 만 받아 일하는 독립 실행 단위입니다. 호스트가 서브에이전트를 지원하면 그것을 쓰고, 지원하지 않으면 새 세션이나 별도 호출로 같은 조건을 만듭니다. 같은 컨텍스트에서 역할만 바꿔 연기하는 것은 서브에이전트가 아닙니다.
 - **역할**: `beaker:<이름>` 에이전트입니다. 정의는 플러그인의 `agents/<이름>.md` 에 있고, frontmatter 의 `tools` 가 그 역할의 도구를 정합니다.
 
@@ -266,10 +266,12 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload .beaker/<target>/bas
 | 3 | `<public-interface>` | 선언부 — 대상 언어 문법 그대로 | `basis/interface.md` |
 | 4 | `<public-types>` | 시그니처에서 도달 가능한 타입 정의 | `basis/interface.md` |
 | 5 | `<technique-hint>` | (선택) 제안 기법 | 오케스트레이터 판단 |
-| 6 | `<techniques>` | `techniques/index.md` 와, 그 「설계 기법」 표에서 쓰는 설계자에 BB 가 있는 문서(`bb-*.md` 중 technique 인 것과 `wb-mcdc.md`), 그리고 `bb-pairwise.md`, `bb-cause-effect-graph.md` 원문 | 정적 참조 문서 |
+| 6 | `<techniques>` | 호스트가 에이전트 정의의 `skills` 를 미리 싣지 못할 때만. `blackbox-test-designer.md` 의 `skills` 목록에 있는 스킬 원문 | 정적 참조 문서 |
 | 7 | `<schemas>` | `references/schemas.md` 원문 | 정적 참조 문서 |
 
-6, 7번은 서브에이전트가 파일을 읽을 수 없어서 오케스트레이터가 정적 참조 문서를 그대로 실어 주는 것입니다. 코드 유래 정보가 아닙니다. 요약하거나 고쳐 싣지 마세요.
+6, 7번은 서브에이전트가 파일을 읽을 수 없어서 정적 참조 문서를 그대로 실어 주는 것입니다. 코드 유래 정보가 아닙니다. 요약하거나 고쳐 싣지 마세요.
+
+기법 스킬은 에이전트 정의의 `skills` 가 시작할 때 실어 줍니다. 블랙박스 설계자에게는 Skill 도구를 주지 않습니다. Skill 도구가 있으면 다른 플러그인의 스킬까지 부를 수 있고, 그중에는 저장소를 읽는 스킬이 있을 수 있어 I1 이 깨집니다. 그래서 스킬은 「부르는」 것이 아니라 「실려 오는」 것이고, 호스트가 미리 싣지 못하면 6번 블록으로 같은 원문을 넣습니다.
 
 블록은 이 일곱 개가 전부입니다. 여덟 번째 블록을 만들지 마세요.
 

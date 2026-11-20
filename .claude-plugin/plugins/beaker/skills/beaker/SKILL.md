@@ -56,9 +56,9 @@ LLM 에게 구현을 보여 주고 테스트를 시키면 테스트가 명세를
 | `references/adopt.md` | 저장소 규약을 따른 테스트 만들기 |
 | `references/schemas.md` | 산출물 JSON 스키마 |
 | `references/verification.md` | 설치 확인, 동작 확인, 검증되지 않은 것 |
-| `techniques/index.md` | 설계 기법 16종 목록, 기준으로만 쓰는 문서, 보류한 기법, 포함 관계, 선택 규칙 |
-| `techniques/bb-*.md` | 명세 기반 기법 문서 15개 |
-| `techniques/wb-*.md` | 구조 기반 기법 문서 15개 |
+| `skills/techniques/` (`beaker:techniques`) | 설계 기법 16종 목록, 기준으로만 쓰는 스킬, 보류한 기법, 포함 관계, 선택 규칙 |
+| `skills/bb-*/` (`beaker:bb-*`) | 명세 기반 기법 스킬 15개 |
+| `skills/wb-*/` (`beaker:wb-*`) | 구조 기반 기법 스킬 15개 |
 | `agents/` | 서브에이전트 역할 6종 |
 | `scripts/check-leak.mjs` | 블랙박스 payload 의 구현 유출 검사 |
 | `scripts/extract-symbols.mjs` | `git diff -U0` 에서 변경 심볼 추출 |

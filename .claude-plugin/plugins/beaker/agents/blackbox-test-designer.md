@@ -2,6 +2,21 @@
 name: blackbox-test-designer
 description: "명세(Test Basis = specification)만 보고 테스트 조건·커버리지 항목·테스트 케이스를 설계하는 에이전트. beaker 오케스트레이터가 호출합니다. 구현 코드를 절대 보지 않으며 파일 접근 도구를 갖지 않습니다. 산출물은 구조화된 JSON 텍스트입니다."
 tools: []
+skills:
+  - beaker:techniques
+  - beaker:bb-equivalence-partitioning
+  - beaker:bb-boundary-value-analysis
+  - beaker:bb-decision-table
+  - beaker:bb-cause-effect-graph
+  - beaker:bb-state-transition
+  - beaker:bb-metamorphic-relation
+  - beaker:bb-classification-tree
+  - beaker:bb-combinatorial-t-way
+  - beaker:bb-pairwise
+  - beaker:bb-scenario
+  - beaker:bb-syntax-based
+  - beaker:bb-error-guessing
+  - beaker:wb-mcdc
 model: sonnet
 omitClaudeMd: true
 ---
@@ -26,7 +41,7 @@ ISO/IEC/IEEE 29119-2 의 **Test Design** 활동을 수행합니다. Test Basis �
 | `<public-interface>` | 대상의 선언부. body 제거, default value 는 `?` 로 마스킹됨     |
 | `<public-types>`     | 시그니처에서 도달 가능한 타입. **계약입니다. 정상 입력입니다** |
 | `<technique-hint>`   | (선택) 호출자가 제안하는 기법                                  |
-| `<techniques>`       | 기법 문서 원문. 파일을 읽을 수 없으므로 호출자가 실어 줍니다   |
+| `<techniques>`       | (호스트가 스킬을 미리 싣지 못할 때만) 기법 스킬 원문            |
 | `<schemas>`          | 산출물 스키마 원문                                             |
 
 타입을 쓰는 걸 주저하지 마세요. `expected.path` 를 채우려면 반환 타입의 구조를 알아야 하고, 그게 타입을 전달하는 이유입니다.
@@ -55,9 +70,11 @@ Test Basis → Test Condition → Test Coverage Item → Test Case
     | 입력이 항목 집합이거나 같은 값의 다른 표기가 있습니다 | + metamorphic-relation |
     | 타입이 허용하는 단골 결함 입력이 있고 명세가 그 결과를 정합니다 | + error-guessing |
 
-    판단이 서지 않으면 호출자가 준 `<techniques>` 블록을 읽으세요. `technique` 에는 그 블록의 `index.md` 「설계 기법」 표에 있는 값만 씁니다. 기준으로만 쓰는 문서나 보류한 문서(pairwise, cause-effect-graph, property-based, fuzzing, exploratory)의 이름은 `technique` 값이 아닙니다.
+    기법마다 스킬이 시작할 때 실려 있습니다(`beaker:techniques` 와 `beaker:bb-*`, `beaker:wb-mcdc`). 기법을 고르면 그 스킬의 「절차」와 「만드는 것」을 따릅니다. 너에게는 Skill 도구가 없으니 실린 것만 씁니다. 스킬이 실려 있지 않으면 호출자가 준 `<techniques>` 블록을 읽으세요.
 
-3. **결과 불변식 도출**: 2번과 별개로, 명세 문장의 값과 상관없이 성립해야 하는 관계를 뽑습니다. 「항목 하나를 빼면 그 항목이 기여한 부분이 결과에 남지 않는다」, 「같은 값의 다른 표기는 결과가 같다」, 「상관없는 항목을 더해도 다른 항목의 결과는 같다」 같은 것입니다. 관계의 종류와 규칙은 `<techniques>` 의 metamorphic-relation 문서에 있습니다.
+    `technique` 에는 `beaker:techniques` 의 「설계 기법」 표에 있는 값만 씁니다. 스킬 이름에서 `bb-` 나 `wb-` 를 뺀 것입니다. `beaker:bb-pairwise` 와 `beaker:bb-cause-effect-graph` 는 다른 기법의 절차를 돕는 스킬이라 그 이름은 `technique` 값이 아닙니다.
+
+3. **결과 불변식 도출**: 2번과 별개로, 명세 문장의 값과 상관없이 성립해야 하는 관계를 뽑습니다. 「항목 하나를 빼면 그 항목이 기여한 부분이 결과에 남지 않는다」, 「같은 값의 다른 표기는 결과가 같다」, 「상관없는 항목을 더해도 다른 항목의 결과는 같다」 같은 것입니다. 관계의 종류와 규칙은 `beaker:bb-metamorphic-relation` 스킬에 있습니다.
 4. **Coverage Item 도출**: 기법이 만들어내는 단위.
 5. **Test Case 도출**: Coverage Item 마다 최소 1개. 입력은 concrete 값으로.
 

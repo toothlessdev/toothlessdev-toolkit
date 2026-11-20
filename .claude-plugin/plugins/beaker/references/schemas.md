@@ -69,7 +69,7 @@ BasisRef         = string            basis=specification → REQ- ID
                                      basis=code          → "파일경로:행번호"
 ```
 
-`Technique` 은 위 16종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다. 기법마다 쓰는 설계자와 Coverage Item 단위는 `techniques/index.md` 에 있습니다. 기준으로만 쓰는 문서(`wb-node-coverage.md` 등)의 이름은 `Technique` 값이 아닙니다.
+`Technique` 은 위 16종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다. 기법마다 쓰는 설계자와 Coverage Item 단위는 `beaker:techniques` 스킬(`skills/techniques/SKILL.md`)에 있습니다. 기준으로만 쓰는 스킬(`beaker:wb-node-coverage` 등)의 이름은 `Technique` 값이 아닙니다.
 
 `PathTechnique` 은 경로를 세는 기법이고, `GroupTechnique` 은 케이스 여러 개가 함께 있어야 Coverage Item 하나가 덮이는 기법입니다. 둘 다 아래 「커버리지 계산」에서 더 엄격하게 셉니다.
 
@@ -127,7 +127,7 @@ CoverageItem {
 
 `predicate` 와 `predicateClass` 는 함께 채우거나 함께 `null` 입니다. 한쪽만 있으면 스키마 위반입니다.
 
-`predicateScope` 는 결정 결과를 세는 Test Condition(`decision`)과 원자 조건 값을 세는 Test Condition(`condition`)을 가릅니다. `branch-condition`, `mcdc`, `multiple-condition-coverage` 가 이 구분을 씁니다. 원자 조건이 하나뿐인 결정은 `decision` 하나로 둡니다.
+`predicateScope` 는 결정 결과를 세는 Test Condition(`decision`)과 원자 조건 값을 세는 Test Condition(`condition`)을 가릅니다. `branch-condition`, `mcdc`, `multiple-condition-coverage` 가 이 구분을 씁니다. 원자 조건이 하나뿐인 결정은 `decision` 하나로 둡니다. 결정이 하나도 없는 대상의 진입 실행 Test Condition 은 `predicate`, `predicateClass`, `predicateScope` 가 모두 `null` 입니다. `basis=code` 에서 세 필드가 `null` 인 것은 이 경우뿐입니다.
 
 ---
 
@@ -196,7 +196,7 @@ Relation         = enum(decomposition, removal, irrelevant-addition,
                         equivalent-representation, idempotence, permutation)
 ```
 
-각 `Relation` 이 무엇을 단언하는지는 `techniques/bb-metamorphic-relation.md` 에 있습니다. `caseRefs` 의 첫 원소가 source input 이고 나머지가 follow-up input 입니다. `removal` 과 `irrelevant-addition` 은 순서가 바뀌면 단언의 뜻이 뒤집힙니다.
+각 `Relation` 이 무엇을 단언하는지는 `beaker:bb-metamorphic-relation` 스킬에 있습니다. `caseRefs` 의 첫 원소가 source input 이고 나머지가 follow-up input 입니다. `removal` 과 `irrelevant-addition` 은 순서가 바뀌면 단언의 뜻이 뒤집힙니다.
 
 `AcceptanceExpectation` 은 명세가 「이 형식을 받는다 / 거절한다」만 정하고 결과 값이나 오류 종류는 정하지 않을 때 씁니다. 주로 `syntax-based` 가 씁니다. 거절은 `over` 파라미터를 이유로 든 입력 거절이면 성립하고, 다른 파라미터를 이유로 든 거절은 이 단언의 대상이 아닙니다.
 

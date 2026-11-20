@@ -7,7 +7,7 @@
 설치한 호스트의 스킬 목록에 `beaker` 가 보여야 합니다. 플러그인 루트에 아래가 모두 있는지도 봅니다.
 
 ```bash
-ls ${CLAUDE_PLUGIN_ROOT}/skills/beaker/SKILL.md ${CLAUDE_PLUGIN_ROOT}/references ${CLAUDE_PLUGIN_ROOT}/techniques ${CLAUDE_PLUGIN_ROOT}/scripts ${CLAUDE_PLUGIN_ROOT}/agents
+ls ${CLAUDE_PLUGIN_ROOT}/skills/beaker/SKILL.md ${CLAUDE_PLUGIN_ROOT}/references ${CLAUDE_PLUGIN_ROOT}/skills/techniques ${CLAUDE_PLUGIN_ROOT}/scripts ${CLAUDE_PLUGIN_ROOT}/agents
 ```
 
 `agents/` 에는 에이전트 정의 6개가 있어야 합니다. `blackbox-test-designer` 의 frontmatter 가 **파일·검색·셸 도구 없음** 인지 확인합니다. 서브에이전트를 이 조건으로 호출할 수 있는지가 격리 강도(`structural` / `payload-only`)를 정합니다.
@@ -124,4 +124,4 @@ beaker blackbox <대상 심볼>
 | `metamorphic-relation` 케이스가 relation 단언으로 번역됩니까 | **미확인** |
 | incident 닫기의 범위 케이스와 `adopt` 가 계약대로 돕니까 | **미확인** |
 | 새 설계 기법 10종(classification-tree, combinatorial-t-way, scenario, syntax-based, error-guessing, mcdc, multiple-condition-coverage, all-uses, edge-pair-coverage, prime-path-coverage)이 설계자 출력과 리포트 집계에서 계약대로 돕니까 | **미확인** |
-| 손으로 짠 covering array 의 tuple 주장을 확인하는 검사 스크립트 | **없음**. `bb-pairwise.md`, `bb-combinatorial-t-way.md` 가 제안한 후속 과제 |
+| 손으로 짠 covering array 의 tuple 주장을 확인하는 검사 스크립트 | **없음**. `beaker:bb-pairwise`, `beaker:bb-combinatorial-t-way` 가 제안한 후속 과제 |

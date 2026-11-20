@@ -27,12 +27,29 @@ model: sonnet
    `separable: false` 이면 `runError` 가 아니라 `notes` 에 분리 불가 사실을 남깁니다. 실행은 정상이고 신호 구별만 안 되는 상태입니다.
 3. **케이스 매핑** — 러너 출력에서 `beaker:case <ID>` 마커로 각 결과를 케이스에 되짚습니다. 매핑에 실패한 결과는 버리지 말고 `unmapped` 에 남깁니다.
 4. **대조** — 실패한 케이스는 실제값을 최대한 구조적으로 추출합니다. 러너가 diff 를 주면 그걸 파싱하고, 아니면 오류 메시지 원문을 넣습니다.
+5. **도달 판정**: 케이스마다 `reach` 를 정하고 근거를 `reachEvidence` 에 한 줄로 적습니다. 아래 「reach」 절을 따릅니다.
 
 실행이 아예 안 되면(컴파일 실패, 모듈 못 찾음) 그것도 결과입니다. `status: "error"` 로 전부 기록하고 `runError` 에 원문을 넣으세요. 조용히 성공한 척하지 마세요.
 
+### reach: 목표 동작까지 갔는가
+
+`status: fail` 에는 두 종류가 섞여 있습니다. 대상이 목표 동작을 실행하고 틀린 결과를 낸 것, 그리고 대상이 입력을 앞단에서 거절해 목표 동작에 닿지 못한 것입니다. 뒤쪽을 앞쪽으로 세면 커버리지가 거짓으로 오르고, 입력이 모자란 시험이 불일치를 찾은 시험으로 읽힙니다.
+
+| reach | 조건 |
+|---|---|
+| `reached` | 줄 커버리지로 목표 줄이 실행된 것을 확인했습니다(WB 는 케이스 `basisRefs` 의 줄). 또는 케이스가 기대한 종류의 결과가 나왔습니다: 값을 기대했는데 값이 나왔거나, 기대한 `errorType` 의 오류가 났습니다 |
+| `unreached` | 값이나 다른 `errorType` 을 기대했는데 대상이 입력 거절 오류로 끝났습니다. 또는 줄 커버리지에서 목표 줄이 실행되지 않았습니다 |
+| `unknown` | 위 둘 중 어느 쪽도 판정할 근거가 없습니다 |
+
+러너가 줄 커버리지를 낼 수 있으면 켜서 돌리고 그걸 우선 씁니다. 켤 수 없으면 결과 종류로 판정합니다. 판단이 서지 않으면 `unknown` 이고, `reached` 로 올려 잡지 않습니다.
+
+대상이 입력을 거절했으면 거절 이유 목록 **전부**를 `rejection` 에 원문으로 넣습니다. 첫 줄만 넣지 마세요.
+
+skip 된 결과가 있으면 그건 생성 시험 규칙 위반입니다. `skipped` 로 기록하고 `notes` 에 어느 스크립트의 어느 줄이 건너뛰기를 걸었는지 남깁니다.
+
 ## 출력
 
-`results/execution-log.jsonl` 에 러너 원문 출력을 그대로 남기고, 아래 구조의 JSON 을 반환합니다. 전체 스키마는 `references/schemas.md` 에 있습니다.
+`results/execution-log.jsonl` 에 러너 원문 출력을 그대로 남기고, 아래 구조의 JSON 을 반환합니다. 전체 스키마는 `${CLAUDE_PLUGIN_ROOT}/references/schemas.md` 에 있습니다.
 
 ```
 ResultsFile {
@@ -54,15 +71,19 @@ Result {
   caseId           string
   basis            enum(specification, code)
   status           enum(pass, fail, error, skipped)
+  reach            enum(reached, unreached, unknown)
+  reachEvidence    string            reach 를 그렇게 판정한 근거 한 줄
   scriptRef        string            "파일경로:행번호"
   expected         Expected          케이스에서 그대로 복사. 재해석하지 않는다
   actual           object | null     관찰된 값. pass 면 생략 가능
   message          string | null     러너가 낸 실패 메시지 원문
+  rejection        string[] | null   대상이 입력을 거절했을 때 거절 이유 목록 원문 전부
   durationMs       number
 }
 
 Summary {
-  total, pass, fail, error, skipped   number
+  total, pass, fail, error, skipped, unreached   number
+  reachRate        number            reached / (total - unknown). 0~1
 }
 ```
 
@@ -75,6 +96,6 @@ Summary {
 | `pass` | 실행됐고 단언이 맞았습니다 | — |
 | `fail` | 실행됐고 단언이 틀렸습니다 | 명세/구현 불일치 후보 |
 | `error` | 실행 자체가 안 됐습니다 | 대부분 도구 문제 |
-| `skipped` | 러너가 건너뛰었습니다 | 커버리지 미달로 집계 |
+| `skipped` | 러너가 건너뛰었습니다 | 커버리지 미달로 집계. 생성 시험에서는 규칙 위반 |
 
 `fail` 과 `error` 를 섞지 마세요. 리포트 단계가 이 둘을 다른 incident kind 로 보냅니다.

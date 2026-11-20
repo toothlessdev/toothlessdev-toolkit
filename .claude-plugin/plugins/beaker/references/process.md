@@ -8,7 +8,7 @@
 
 ## 용어와 경로
 
-- **`<skill>`**: 이 스킬의 디렉터리, 즉 `SKILL.md` 가 있는 곳입니다. `scripts/`, `references/` 경로는 모두 여기서부터 읽습니다.
+- **`${CLAUDE_PLUGIN_ROOT}`**: beaker 플러그인의 루트입니다. `references/`, `techniques/`, `scripts/`, `agents/` 경로는 모두 여기서부터 읽습니다. 호스트가 이 변수를 풀어 주지 않으면 `skills/beaker/SKILL.md` 의 두 단계 위 디렉터리입니다.
 - **서브에이전트**: 오케스트레이터의 대화 이력과 읽은 파일을 물려받지 않고, 역할 프롬프트와 payload 만 받아 일하는 독립 실행 단위입니다. 호스트가 서브에이전트를 지원하면 그것을 쓰고, 지원하지 않으면 새 세션이나 별도 호출로 같은 조건을 만듭니다. 같은 컨텍스트에서 역할만 바꿔 연기하는 것은 서브에이전트가 아닙니다.
 - **역할**: `beaker:<이름>` 에이전트입니다. 정의는 플러그인의 `agents/<이름>.md` 에 있고, frontmatter 의 `tools` 가 그 역할의 도구를 정합니다.
 
@@ -57,6 +57,8 @@
   reports/
     incidents.json           Test Incident Report
     report.md                Test Completion Report
+  adopt/
+    case-map.json            adopt 모드만. 케이스 ID 와 저장소 시험의 대응
 ```
 
 테스트 스크립트만 저장소 안으로 나갑니다. **배치는 고정값이 아니라 저장소에서 도출합니다** (Step 3).
@@ -88,6 +90,7 @@
 | `whitebox` | 선택 | X | O | O |
 | `full` | 한 번 질의, 없으면 BB 생략 | 조건부 | O | O |
 | `rerun` | — | X | X | [7],[8]만 |
+| `adopt` | 필요 없음 | X | X | `references/adopt.md` |
 
 `full` 에서 [4] 와 [5] 는 **반드시 순차**입니다. 병렬로 돌리지 마세요.
 
@@ -108,9 +111,37 @@
 
 **JSDoc 과 주석은 명세가 아닙니다.** 코드 옆에서 코드에 맞춰 갱신되므로 코드 유래 정보입니다. 명세를 찾을 때 후보로도 올리지 마세요.
 
-찾은 명세는 `basis/requirements.md` 로 복사하고 항목마다 ID 를 붙입니다. 원문을 요약하거나 재서술하지 마세요.
+찾은 명세는 `basis/requirements.md` 로 복사하고 항목마다 ID 와 출처 등급을 붙입니다. 원문을 요약하거나 재서술하지 마세요.
 
-한 줄에 한 항목, `- <ID>: <원문>` 형식입니다. ID 접두사 `REQ-` 만 계약이고 번호 체계와 문장은 원문을 따릅니다. 명세가 계층 구조를 가지면 ID 로 그 구조를 표현합니다.
+형식은 `references/schemas.md` 의 `basis/requirements.md` 절입니다. ID 접두사 `REQ-` · `OBL-` 와 등급 표기만 계약이고 번호 체계와 문장은 원문을 따릅니다. 명세가 계층 구조를 가지면 ID 로 그 구조를 표현합니다.
+
+### 출처 등급
+
+명세가 틀리면 그 명세로 만든 블랙박스 기대값도 같이 틀립니다. 특히 대상 코드와 **같은 변경에서** 고친 명세는 구현을 보고 쓴 문장일 수 있습니다. 그래서 `pr-review` 모드에만 있던 출처 등급을 모든 모드의 명세 항목에 붙입니다.
+
+| 등급 | 조건 |
+|---|---|
+| `external` | 대상 코드의 이번 변경과 무관하게 이미 있던 명세. 명세 파일이 이번 변경에서 바뀌지 않았습니다 |
+| `quoted` | 이번 변경에서 바뀐 문서지만, 그 항목은 바뀌지 않은 외부 원문을 옮겨 온 것입니다 |
+| `authored` | 이번 변경(작업 트리의 미커밋 변경, 또는 기준 브랜치 이후 커밋)에서 대상 코드와 함께 추가되거나 고쳐진 항목 |
+
+판정은 `git diff <기준>...HEAD` 와 `git diff` 에서 명세 파일의 그 줄이 바뀌었는지로 합니다. 기준 브랜치를 알 수 없으면 기본 브랜치를 씁니다. **판단이 서지 않으면 낮은 등급으로 내립니다.**
+
+`authored` 항목이 하나라도 있으면 리포트 요약에 「`authored` 명세는 명세 자체를 검증하지 못했다」를 남깁니다. 블랙박스 설계자에게는 등급을 붙인 채로 넘기고, 설계자는 `authored` 항목에 결과 불변식(`metamorphic-relation`)을 우선 붙입니다.
+
+### 값을 비교하는 요구사항
+
+요구사항이 두 값을 비교하면(「같은」, 「일치하면」, 「동일한 항목」, 「같은 행」) 그 값이 어떤 표기로 들어올 수 있는지가 판정에 필요합니다. 비교 문장만 가져오면 블랙박스 설계자는 같은 값의 다른 표기를 떠올릴 근거가 없습니다.
+
+1. 그 값의 수용 규칙(어떤 형식·표기·범위를 같은 값으로 받는지)을 정한 명세를 코드 밖에서 찾습니다.
+2. 찾으면 `REQ-` 항목으로 함께 복사하고 출처를 적습니다.
+3. 못 찾으면 그 사실을 `basis/requirements.md` 끝에 「수용 규칙 없음: <비교 대상 값>」 한 줄로 남깁니다. 설계자가 이 줄을 보고 `ambiguities` 에 올립니다.
+
+### 상대 컴포넌트 의무
+
+명세에는 대상이 아니라 **다른 컴포넌트가 지켜야 하는** 문장이 섞여 있습니다. 「~에 실려야 한다」, 「~가 보내야 한다」, 「호출하는 쪽이 ~을 채운다」처럼 주어가 대상의 호출자나 입력 생산자인 문장입니다.
+
+이 문장은 `REQ-` 가 아니라 `OBL-` 로 따로 뽑습니다. 대상의 시험으로는 검증할 수 없고, 시험이 그 결과를 손으로 만들어 넣으면 상대 쪽이 그 의무를 안 지켜도 시험은 통과합니다. reporter 가 Step 8 에서 확인합니다.
 
 ### 없을 때
 
@@ -173,7 +204,7 @@ payload 를 만든 직후 실행합니다. payload 는 구현의 선언부와 �
 | `publicTypes` | 시그니처에서 도달 가능한 공개 타입 정의 줄 (리터럴 유니온 포함) | 토큰 겹침과 리터럴 검사 모두 |
 
 ```bash
-node <skill>/scripts/check-leak.mjs --payload .beaker/<target>/basis/interface.md \
+node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload .beaker/<target>/basis/interface.md \
                                     --impl <구현 파일> \
                                     --spec .beaker/<target>/basis/requirements.md \
                                     --ranges .beaker/<target>/basis/excerpt-ranges.json
@@ -231,11 +262,11 @@ node <skill>/scripts/check-leak.mjs --payload .beaker/<target>/basis/interface.m
 | 순서 | 블록 | 내용 | 출처 |
 |---|---|---|---|
 | 1 | `<task>` | 대상 식별자를 포함한 한 문장 지시 | 오케스트레이터 |
-| 2 | `<requirements>` | 명세 원문 전체 | `basis/requirements.md` |
+| 2 | `<requirements>` | 명세 원문 전체. 등급 표기 포함, `## 상대 컴포넌트 의무` 절은 뺍니다 | `basis/requirements.md` |
 | 3 | `<public-interface>` | 선언부 — 대상 언어 문법 그대로 | `basis/interface.md` |
 | 4 | `<public-types>` | 시그니처에서 도달 가능한 타입 정의 | `basis/interface.md` |
 | 5 | `<technique-hint>` | (선택) 제안 기법 | 오케스트레이터 판단 |
-| 6 | `<techniques>` | `references/techniques.md` 와 `references/techniques/` 문서 원문 | 정적 참조 문서 |
+| 6 | `<techniques>` | `techniques/index.md` 와 `techniques/bb-*.md` 문서 원문 | 정적 참조 문서 |
 | 7 | `<schemas>` | `references/schemas.md` 원문 | 정적 참조 문서 |
 
 6, 7번은 서브에이전트가 파일을 읽을 수 없어서 오케스트레이터가 정적 참조 문서를 그대로 실어 주는 것입니다. 코드 유래 정보가 아닙니다. 요약하거나 고쳐 싣지 마세요.
@@ -281,21 +312,41 @@ JSON 파싱에 실패하면 재요청합니다. 직접 고쳐 쓰지 마세요.
 
 반환값의 `conditions` / `cases` 를 기존 파일에 **append** 합니다. BB 항목을 덮어쓰지 마세요.
 
+### characterization 은 검증이 아니다
+
+화이트박스 케이스의 기대값은 현재 구현이 하는 일입니다. `defensive` · `infrastructural` predicate 를 고정하는 것은 회귀 시험으로 쓸 만하지만, `business-rule` predicate 를 고정한 케이스는 **결함 동작을 회귀 시험으로 굳힐 수 있습니다.** 그래서 케이스마다 `pins` 에 그 predicate 의 class 를 적고, `pins: business-rule` 케이스는 사람이 확인하기 전까지 「고정만 했고 검증은 안 됨」으로 리포트에 따로 모읍니다. 저장소에 넣는 것은 `adopt` 가 정합니다(`references/adopt.md`).
+
+명세가 「이 영역은 계약이 아니다」, 「범위 밖이다」라고 **뺀** 영역은 명세 근거가 있는 것이 아닙니다. 그 영역의 `business-rule` predicate 는 근거 없음으로 보고 `unexplained-implementation-behavior` 후보로 올립니다. 「명세가 언급했다」와 「명세가 그 동작을 요구했다」는 다릅니다.
+
 ---
 
 ## 8. Step 6~8
 
 | 단계 | 역할 (`beaker:<이름>`) | 핵심 규칙 |
 |---|---|---|
-| Implementation | `test-implementer` | `basis` 로 `layout` 의 두 target 중 선택. 대상 소스 안 읽음 |
-| Execution | `test-executor` | `layout` 의 selector 로 basis 별 따로 실행. 호출 전후로 `layout` 아래 테스트 파일의 해시를 비교해 다르면 리포트에 올립니다 |
-| Reporting | `test-reporter` | `classification` 은 `null` 로 두고 사람에게 넘김 |
+| Implementation | `test-implementer` | `basis` 로 `layout` 의 두 target 중 선택. 대상 소스 안 읽음. 조건부 건너뛰기 금지 |
+| Execution | `test-executor` | `layout` 의 selector 로 basis 별 따로 실행. 케이스마다 `reach` 와 `rejection` 기록. 호출 전후로 `layout` 아래 테스트 파일의 해시를 비교해 다르면 리포트에 올립니다 |
+| Reporting | `test-reporter` | 도달률을 첫 줄에. `classification` 은 `null` 로 두고 사람에게 넘김 |
 
 Step 3 이 만든 `environment/runner-profile.json` 을 `<runner-profile>` 블록에 그대로 실어 전달합니다. 요약하거나 일부만 보내지 마세요 — implementer 는 `layout` 을, executor 는 `selectByPath` / `selectByName` 을 각각 필요로 합니다.
 
-reporter 에게는 이번 실행의 격리 강도(`structural` | `payload-only`, §10)도 전달합니다.
+reporter 에게는 이번 실행의 격리 강도(`structural` | `payload-only`, §10)와 `basis/requirements.md` 의 `OBL-` 목록도 전달합니다.
 
 `unresolved` 가 비어 있지 않으면 그 사실도 함께 전달합니다. **추측으로 채우지 마세요.** 다음 단계가 그 추측 위에 스크립트를 씁니다.
+
+### 건너뛰기 금지
+
+생성한 시험에는 조건부 건너뛰기(전제가 안 맞으면 통과 처리하는 가정문, skip 표시, 비활성 표시)를 넣지 않습니다. 건너뛴 시험은 녹색으로 남아서, 기대값이 틀렸어도 한 번도 돌지 않은 채 아무도 모릅니다. 전제 상태를 만들 수 없으면 그 케이스를 스크립트에 쓰지 않고 `unresolved` 로 올립니다. 커버되지 않은 것으로 셉니다.
+
+### 도달 보강 반복
+
+executor 결과에 `reach: unreached` 가 있으면 결과를 완료로 보고하지 않고 한 번 더 돕니다.
+
+1. `unreached` 케이스와 그 `rejection` 을 implementer 에게 `<reach-gaps>` 블록으로 줍니다.
+2. implementer 는 저장소에 이미 있는 픽스처 빌더를 찾아, **케이스 `inputs` 에 없는 필드만** 채웁니다. 케이스가 정한 값은 바꾸지 않고, 채운 필드는 `inputFills` 로 돌려줍니다.
+3. executor 로 다시 실행합니다.
+
+반복은 최대 2회입니다. 그 뒤에도 남은 `unreached` 는 reporter 가 「도달하지 못한 케이스」 절에 거절 이유와 함께 남깁니다. 「입력이 모자랐다」로 단정하지 않습니다. 그 거절이 의무를 지는 상대 컴포넌트가 채워야 할 입력 때문이면 `OBL-` 확인 대상입니다.
 
 ---
 
@@ -322,6 +373,8 @@ ambiguous-requirement  명세가 판정하기에 부족하다
 
 사용자가 "고쳐줘"라고 명시적으로 말하기 전까지 아무것도 고치지 않습니다.
 
+사용자가 incident 를 고쳤다거나 닫아 달라고 하면 `references/resolution.md` 의 순서를 따릅니다. 반례 하나가 통과하는 것으로 닫지 않습니다.
+
 ---
 
 ## 10. Invariant 와 강제 수단
@@ -334,7 +387,7 @@ ambiguous-requirement  명세가 판정하기에 부족하다
 |---|---|---|---|
 | I1 | BB 설계자가 구현을 읽지 못합니다 | **구조적**: 파일·검색·셸 도구 없이 호출 | **검사**: payload 만 전달하고 I2 로 확인. 서브에이전트가 도구를 가졌다면 읽을 수 있습니다 |
 | I2 | BB payload 에 구현이 없습니다 | **검사**: `scripts/check-leak.mjs` | 같음 |
-| I3 | implementer 가 기대값을 바꾸지 않습니다 | 프롬프트 + I2 로 payload 추적 | 같음 |
+| I3 | implementer 가 기대값과 케이스 입력값을 바꾸지 않습니다 | 프롬프트 + `inputFills` 가 케이스 `inputs` 키와 겹치지 않는지 오케스트레이터가 대조 | 같음 |
 | I4 | executor 가 테스트를 고치지 않습니다 | 프롬프트 + 사후 검증: 실행 전후 테스트 파일 해시 비교. 러너와 로그 기록에 셸이 필요해 도구 제한으로는 막지 못합니다 | 같음 |
 | I5 | reporter 가 테스트를 고치지 않습니다 | 프롬프트 + 경로 규약 | 같음 |
 | I6 | WB 가 BB 산출물을 안 고칩니다 | `layout.denyPattern` + 순차 실행 | 규약 |
@@ -353,3 +406,5 @@ I5, I6 을 구조적으로 만들려면 호스트의 경로 단위 쓰기 거부
 - 커버리지가 낮다고 BB 케이스를 추가 생성하기 (그건 WB 의 일입니다)
 - incident 가 많다고 필터링해서 리포트를 짧게 만들기
 - 명세가 없을 때 코드에서 요구사항을 복원하기
+- `reach: unreached` 가 남았는데 완료로 보고하기
+- 생성 시험에 건너뛰기 표시 넣기

@@ -52,6 +52,8 @@ model: sonnet
 - 대응 없음 → `incidentCandidates` 에 `unexplained-implementation-behavior` 로 올립니다
 - 명세에는 있는데 대응 predicate 가 없음 → `possible-missing-implementation` 으로 올립니다
 
+**명세가 뺀 영역은 근거가 아닙니다.** 명세가 「이 동작은 계약이 아니다」, 「범위 밖이다」, 「보장하지 않는다」고 적은 영역의 `business-rule` predicate 는 「대응 있음」이 아니라 「대응 없음」입니다. 그 항목 ID 를 `basisRefs` 에 넣지 말고 incident 후보로 올리세요. 명세가 그 영역을 언급했다는 것은 그 동작을 요구했다는 뜻이 아닙니다. 이걸 근거로 치면 결함 동작이 characterization 시험으로 굳어집니다.
+
 호출자가 명세를 주지 않았다면(`whitebox` 모드 단독 실행) 이 단계는 건너뜁니다. 명세를 찾으러 저장소를 뒤지지 마세요.
 
 ### 3.5 PR 모드 — `<changed-lines>` 가 오면
@@ -77,13 +79,17 @@ model: sonnet
 
 ### 4. Coverage Item → Test Case
 
-기법은 `branch-condition` 이 기본입니다. 상태 머신이면 `state-transition` 을 추가로 씁니다. 필요하면 `references/techniques.md` 와 `references/techniques/` 를 읽으세요.
+기법은 `branch-condition` 이 기본입니다. 상태 머신이면 `state-transition` 을 추가로 씁니다. 필요하면 `${CLAUDE_PLUGIN_ROOT}/techniques/index.md`, `${CLAUDE_PLUGIN_ROOT}/techniques/wb-branch-condition.md`, `${CLAUDE_PLUGIN_ROOT}/techniques/bb-state-transition.md` 를 읽으세요.
+
+케이스의 `inputs` 는 목표 분기에 **닿을 수 있게** 채웁니다. 목표 분기 앞에 입력 검증이나 다른 early return 이 있으면 그것을 통과하는 값까지 넣으세요. 그 앞에서 끝나는 케이스는 실행돼도 `reach: unreached` 로 세어져 구조 커버리지에 들어가지 않습니다.
+
+각 케이스의 `pins` 에 그 케이스가 고정하는 predicate 의 `predicateClass` 를 적습니다. `pins: business-rule` 케이스는 현재 동작을 고정할 뿐 옳은지 검증하지 않으므로, 사람이 확인하기 전에는 저장소의 회귀 시험으로 들어가지 않습니다.
 
 ## 출력
 
 **JSON 하나만** 반환합니다. 마크다운 펜스 없이.
 
-블랙박스 설계자와 **같은 스키마**를 씁니다. 전체는 `${CLAUDE_PLUGIN_ROOT}/skills/beaker/references/schemas.md` 에 있고, 아래는 code basis 에서 달라지는 부분입니다.
+블랙박스 설계자와 **같은 스키마**를 씁니다. 전체는 `${CLAUDE_PLUGIN_ROOT}/references/schemas.md` 에 있고, 아래는 code basis 에서 달라지는 부분입니다.
 
 ```
 WhiteboxDesignerOutput {
@@ -117,6 +123,7 @@ TestCase {
   basis            "code"
   ...                                나머지는 블랙박스와 동일
   expectedDescription  string        (characterization) 표기를 반드시 포함
+  pins             enum(business-rule, defensive, infrastructural)   필수
 }
 
 IncidentCandidate {

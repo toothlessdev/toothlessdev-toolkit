@@ -34,13 +34,16 @@ Test Condition  --[technique]-->  Coverage Item  -->  Test Case
 
 | 기법 | 분류 | 쓰는 에이전트 | Coverage Item 이 되는 것 |
 |---|---|---|---|
-| [equivalence-partitioning](techniques/equivalence-partitioning.md) | specification-based | BB | 각 파티션 |
-| [boundary-value-analysis](techniques/boundary-value-analysis.md) | specification-based | BB | 각 경계값 |
-| [decision-table](techniques/decision-table.md) | specification-based | BB | 각 rule |
-| [state-transition](techniques/state-transition.md) | specification-based | BB, WB | 각 transition |
-| [branch-condition](techniques/branch-condition.md) | structure-based | WB | 각 분기 결과 |
+| [equivalence-partitioning](bb-equivalence-partitioning.md) | specification-based | BB | 각 파티션 |
+| [boundary-value-analysis](bb-boundary-value-analysis.md) | specification-based | BB | 각 경계값 |
+| [decision-table](bb-decision-table.md) | specification-based | BB | 각 rule |
+| [state-transition](bb-state-transition.md) | specification-based | BB, WB | 각 transition |
+| [metamorphic-relation](bb-metamorphic-relation.md) | specification-based | BB | 각 relation 과 적용할 입력 묶음 |
+| [branch-condition](wb-branch-condition.md) | structure-based | WB | 각 분기 결과 |
 
-**5개가 전부입니다.** 목록에 없는 기법 이름을 `technique` 필드에 쓰지 마세요.
+**6개가 전부입니다.** 목록에 없는 기법 이름을 `technique` 필드에 쓰지 마세요.
+
+파일 이름 접두사는 주로 쓰는 설계자입니다. `bb-` 는 블랙박스, `wb-` 는 화이트박스입니다. `state-transition` 은 `bb-` 파일이지만 화이트박스도 씁니다.
 
 ---
 
@@ -54,8 +57,11 @@ Test Condition 의 **형태**를 보고 고릅니다. 도메인이 아니라 형
 | 순서 있는 도메인에 임계값이 있습니다 | + boundary-value-analysis |
 | 불리언 조건 여러 개의 조합으로 결과가 결정됩니다 | decision-table |
 | 같은 입력이라도 이전 이력에 따라 결과가 다릅니다 | state-transition |
+| 입력이 항목 집합이거나, 같은 값의 다른 표기가 있거나, 명세 항목 등급이 `authored` 입니다 | + metamorphic-relation |
 
 EP 와 BVA 는 거의 항상 같이 갑니다. 파티션을 나누면 그 경계가 따라 나옵니다.
+
+metamorphic-relation 은 다른 기법을 대체하지 않고 더해집니다. 명세 문장이 틀려도 살아남는 판정 기준이라, 명세를 검증할 수 없는 `authored` 항목에서 특히 필요합니다.
 
 화이트박스 설계자는 `branch-condition` 이 기본이고, 대상이 상태를 갖고 있으면 `state-transition` 을 추가합니다.
 

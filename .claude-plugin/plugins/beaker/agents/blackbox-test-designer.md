@@ -44,13 +44,18 @@ Test Basis → Test Condition → Test Coverage Item → Test Case
 
     | 조건의 형태                                      | 기법                     |
     | ------------------------------------------------ | ------------------------ |
-    | 순서 있는 도메인에 임계값이 있습니다             | boundary-value-analysis  |
     | 값의 부류가 나뉘고 부류마다 결과가 다릅니다      | equivalence-partitioning |
-    | 불리언 조건 여러 개의 조합으로 결과가 결정됩니다 | decision-table           |
+    | 순서 있는 도메인에 임계값이 있습니다             | + boundary-value-analysis |
+    | 불리언 조건 여러 개의 조합으로 결과가 결정됩니다 | decision-table. 조합이 너무 많으면 mcdc |
     | 같은 입력이라도 이전 이력에 따라 결과가 다릅니다 | state-transition         |
+    | 입력의 측면이 많아 분할 누락이 걱정됩니다        | classification-tree      |
+    | 서로 독립인 파라미터의 값 조합이 폭발합니다      | combinatorial-t-way (기본 t = 2) |
+    | 명세가 주 흐름과 대안 흐름을 정의하고 대상이 그 진입점입니다 | scenario |
+    | 명세가 입력 형식을 문법으로 정합니다             | syntax-based             |
     | 입력이 항목 집합이거나 같은 값의 다른 표기가 있습니다 | + metamorphic-relation |
+    | 타입이 허용하는 단골 결함 입력이 있고 명세가 그 결과를 정합니다 | + error-guessing |
 
-    판단이 서지 않으면 호출자가 준 `<techniques>` 블록을 읽으세요.
+    판단이 서지 않으면 호출자가 준 `<techniques>` 블록을 읽으세요. `technique` 에는 그 블록의 `index.md` 「설계 기법」 표에 있는 값만 씁니다. 기준으로만 쓰는 문서나 보류한 문서(pairwise, cause-effect-graph, property-based, fuzzing, exploratory)의 이름은 `technique` 값이 아닙니다.
 
 3. **결과 불변식 도출**: 2번과 별개로, 명세 문장의 값과 상관없이 성립해야 하는 관계를 뽑습니다. 「항목 하나를 빼면 그 항목이 기여한 부분이 결과에 남지 않는다」, 「같은 값의 다른 표기는 결과가 같다」, 「상관없는 항목을 더해도 다른 항목의 결과는 같다」 같은 것입니다. 관계의 종류와 규칙은 `<techniques>` 의 metamorphic-relation 문서에 있습니다.
 4. **Coverage Item 도출**: 기법이 만들어내는 단위.
@@ -94,7 +99,9 @@ TestCondition {
 CoverageItem {
   id               string            CI- 접두사
   technique        enum(equivalence-partitioning, boundary-value-analysis,
-                        decision-table, state-transition, metamorphic-relation)
+                        decision-table, state-transition, metamorphic-relation,
+                        classification-tree, combinatorial-t-way, scenario,
+                        syntax-based, error-guessing, mcdc)
   description      string            이 항목이 세는 단위. 명세에서 읽어낸 실제 값으로
 }
 
@@ -137,9 +144,17 @@ RelationExpectation {
   relation         enum(decomposition, removal, irrelevant-addition,
                         equivalent-representation, idempotence, permutation)
   over             string            관계가 성립하는 파라미터
-  caseRefs         string[]          비교 대상 케이스 id. 2개 이상
+  caseRefs         string[]          비교 대상 케이스 id. 2개 이상. 첫 원소가 source input
+}
+
+AcceptanceExpectation {
+  kind             "acceptance"
+  over             string            수용 여부를 판정할 파라미터
+  accepted         boolean           명세가 그 입력을 받는다(true) 거절한다(false)
 }
 ```
+
+`acceptance` 는 명세가 「받는다 / 거절한다」만 정하고 결과 값이나 오류 종류를 정하지 않을 때만 씁니다. 결과 값이나 오류 종류를 정했으면 `value` 나 `throws` 를 씁니다.
 
 `path` 를 채우려면 반환 타입의 구조를 알아야 합니다. `<public-types>` 가 그래서 옵니다.
 

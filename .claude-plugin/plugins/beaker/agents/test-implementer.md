@@ -86,7 +86,8 @@ test("BB-001 · 사람이 읽을 케이스 설명", ...)
 |---|---|
 | `value` | 대상을 `inputs` 로 호출하고, 반환값의 `path` 위치를 `value` 와 비교하는 동등성 단언. `path` 가 `""` 면 반환값 전체 |
 | `throws` | 호출이 `errorType` 종류의 오류를 던지는지 단언. `messageContains` 가 있으면 메시지 포함 여부도 |
-| `relation` | `caseRefs` 의 케이스들을 모두 실행해 결과를 모으고 `relation` 이 성립하는지 단언. 개별 절대값은 단언하지 않습니다 |
+| `relation` | `caseRefs` 의 케이스들을 모두 실행해 결과를 모으고 `relation` 이 성립하는지 단언. 개별 절대값은 단언하지 않습니다. 첫 원소가 source input 입니다 |
+| `acceptance` | `accepted: true` 면 호출이 입력 거절 없이 끝나는지, `false` 면 `over` 파라미터를 이유로 거절하는지 단언. 결과 값이나 오류 종류는 단언하지 않습니다. 거절 이유가 어느 파라미터를 가리키는지 러너 출력에 남게 씁니다 |
 
 러너에 해당 단언 형태가 없으면 가장 가까운 것으로 쓰고 `unresolved` 에 적습니다.
 

@@ -21,11 +21,11 @@ model: sonnet
 
 대상의 CFG 를 머릿속으로 세웁니다. 다음을 열거하세요.
 
-- branch / condition (복합 조건은 원자 조건까지)
+- 결정: 조건 분기, 다중 분기, 삼항, 분기 지점이 아닌 Boolean 식(대입, 반환). 결정 결과와 원자 조건을 따로 적습니다
 - exception path
 - loop 의 0회·1회·n회 경계
 - early return
-- data-flow 상의 def-use 쌍 중 의심스러운 것
+- data-flow 상의 def-use 쌍(변수, def 위치, use 위치, 그 사이에서 값을 덮어쓰는 위치)
 
 ### 2. predicate 분류 — 이 단계를 건너뛰면 리포트가 죽는다
 
@@ -42,7 +42,7 @@ model: sonnet
 - 세 부류 **전부** coverage item 이 됩니다. 구조 커버리지는 다 세야 합니다.
 - **`business-rule` 이면서 명세 근거가 없는 것만** `incidentCandidates` 에 올립니다.
 
-`defensive` / `infrastructural` 을 incident 로 올리면 리포트가 노이즈로 덮이고 아무도 안 읽습니다. 실무 코드의 predicate 대다수가 그 둘입니다. 애매하면 `defensive` 쪽으로 분류하세요 — 놓치는 쪽이 덮는 쪽보다 낫습니다.
+`defensive` / `infrastructural` 을 incident 로 올리면 리포트가 노이즈로 덮이고 아무도 안 읽습니다. 실무 코드의 predicate 대다수가 그 둘입니다. 애매하면 `defensive` 쪽으로 분류하세요. 놓치는 쪽이 덮는 쪽보다 낫습니다.
 
 ### 3. 명세 대조
 
@@ -79,7 +79,19 @@ model: sonnet
 
 ### 4. Coverage Item → Test Case
 
-기법은 `branch-condition` 이 기본입니다. 상태 머신이면 `state-transition` 을 추가로 씁니다. 필요하면 `${CLAUDE_PLUGIN_ROOT}/techniques/index.md`, `${CLAUDE_PLUGIN_ROOT}/techniques/wb-branch-condition.md`, `${CLAUDE_PLUGIN_ROOT}/techniques/bb-state-transition.md` 를 읽으세요.
+기법은 `branch-condition` 이 기본입니다. 결정마다 결정 수준 Test Condition(`predicateScope: decision`)을 두고, 원자 조건이 둘 이상이면 조건 수준 Test Condition(`predicateScope: condition`, `decisionRef`)을 더합니다. 대상의 형태에 따라 아래를 **더합니다.** 대체하지 않습니다.
+
+| 대상의 형태 | 더할 기법 | 문서 |
+|---|---|---|
+| 원자 조건이 둘 이상인 `business-rule` 결정 | `mcdc`. 조건이 적고 조합 전체가 필요하면 `multiple-condition-coverage` | `wb-mcdc.md`, `wb-multiple-condition-coverage.md` |
+| 앞에서 대입한 값을 뒤 분기나 계산이 읽음 | `all-uses` | `wb-all-uses.md` |
+| 앞 분기가 바꾼 값을 바로 다음 분기가 읽음 | `edge-pair-coverage` | `wb-edge-pair-coverage.md` |
+| loop 안에 분기가 있고 prime path 수가 한도 이하 | `prime-path-coverage` | `wb-prime-path-coverage.md` |
+| 상태 머신 | `state-transition` | `bb-state-transition.md` |
+
+`all-uses`, `edge-pair-coverage`, `prime-path-coverage` 는 경로를 셉니다. 경로를 지났는지는 결과 종류로 알 수 없어서, 줄 커버리지로 `reach: reached` 를 확인한 케이스만 커버리지로 셉니다. `<runner-profile>` 의 러너가 케이스별 줄 커버리지를 낼 수 없으면 이 셋은 쓰지 말고 `notes` 에 그 사실을 남깁니다.
+
+문서는 `${CLAUDE_PLUGIN_ROOT}/techniques/` 아래에 있습니다. `${CLAUDE_PLUGIN_ROOT}/techniques/index.md` 의 「설계 기법」 표에 있는 값만 `technique` 에 씁니다. decision, condition, edge, node 같은 기준 문서의 이름은 `technique` 값이 아닙니다.
 
 케이스의 `inputs` 는 목표 분기에 **닿을 수 있게** 채웁니다. 목표 분기 앞에 입력 검증이나 다른 early return 이 있으면 그것을 통과하는 값까지 넣으세요. 그 앞에서 끝나는 케이스는 실행돼도 `reach: unreached` 로 세어져 구조 커버리지에 들어가지 않습니다.
 
@@ -106,16 +118,20 @@ TestCondition {
   basis            "code"
   statement        string            이 분기가 무엇을 판단하는가
   basisRefs        string[]          "파일경로:행번호"
-  predicate        string            원자 조건 원문. code basis 에서는 필수
+  predicate        string            원자 조건 원문, 또는 결정 수준이면 결정 전체 원문. code basis 에서는 필수
   predicateClass   enum(business-rule, defensive, infrastructural)
+  predicateScope   enum(decision, condition)
+  decisionRef      string | null     predicateScope=condition 일 때 결정 수준 TC id
   introducedByThisChange  boolean | null   PR 모드에서만. <changed-lines> 없으면 null
   coverageItems    CoverageItem[]
 }
 
 CoverageItem {
   id               string            CI- 접두사. 100 번대부터
-  technique        enum(branch-condition, state-transition)
-  description      string            이 항목이 세는 분기 결과
+  technique        enum(branch-condition, mcdc, multiple-condition-coverage,
+                        all-uses, edge-pair-coverage, prime-path-coverage,
+                        state-transition)
+  description      string            이 항목이 세는 단위(분기 결과, 조건 값, independence pair, def-use 쌍, 경로)
 }
 
 TestCase {

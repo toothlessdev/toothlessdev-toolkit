@@ -45,7 +45,21 @@ Technique        = enum(equivalence-partitioning,
                         decision-table,
                         state-transition,
                         metamorphic-relation,
-                        branch-condition)
+                        classification-tree,
+                        combinatorial-t-way,
+                        scenario,
+                        syntax-based,
+                        error-guessing,
+                        mcdc,
+                        branch-condition,
+                        multiple-condition-coverage,
+                        all-uses,
+                        edge-pair-coverage,
+                        prime-path-coverage)
+
+PathTechnique    = enum(all-uses, edge-pair-coverage, prime-path-coverage)
+
+GroupTechnique   = enum(metamorphic-relation, mcdc)
 
 PredicateClass   = enum(business-rule, defensive, infrastructural)
 
@@ -55,7 +69,9 @@ BasisRef         = string            basis=specification → REQ- ID
                                      basis=code          → "파일경로:행번호"
 ```
 
-`Technique` 은 위 6종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다.
+`Technique` 은 위 16종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다. 기법마다 쓰는 설계자와 Coverage Item 단위는 `techniques/index.md` 에 있습니다. 기준으로만 쓰는 문서(`wb-node-coverage.md` 등)의 이름은 `Technique` 값이 아닙니다.
+
+`PathTechnique` 은 경로를 세는 기법이고, `GroupTechnique` 은 케이스 여러 개가 함께 있어야 Coverage Item 하나가 덮이는 기법입니다. 둘 다 아래 「커버리지 계산」에서 더 엄격하게 셉니다.
 
 `PredicateClass` 는 셋 다 커버리지 항목이 되지만 **incident 후보는 `business-rule` 뿐입니다.**
 
@@ -95,8 +111,10 @@ TestCondition {
   basis            Basis
   statement        string            검증 가능한 성질 한 문장
   basisRefs        BasisRef[]        1개 이상
-  predicate        string | null     basis=code 에서만. 원자 조건 원문
+  predicate        string | null     basis=code 에서만. 원자 조건 원문, 또는 predicateScope=decision 이면 결정 전체 원문
   predicateClass   PredicateClass | null   basis=code 에서만
+  predicateScope   enum(decision, condition) | null   basis=code 에서만
+  decisionRef      Ref<TestCondition> | null    predicateScope=condition 일 때 그 조건이 속한 결정 수준 TC
   coverageItems    CoverageItem[]    1개 이상
 }
 
@@ -108,6 +126,8 @@ CoverageItem {
 ```
 
 `predicate` 와 `predicateClass` 는 함께 채우거나 함께 `null` 입니다. 한쪽만 있으면 스키마 위반입니다.
+
+`predicateScope` 는 결정 결과를 세는 Test Condition(`decision`)과 원자 조건 값을 세는 Test Condition(`condition`)을 가릅니다. `branch-condition`, `mcdc`, `multiple-condition-coverage` 가 이 구분을 씁니다. 원자 조건이 하나뿐인 결정은 `decision` 하나로 둡니다.
 
 ---
 
@@ -145,6 +165,13 @@ TestCase {
 
 ```
 Expected = ValueExpectation | ThrowsExpectation | RelationExpectation
+         | AcceptanceExpectation
+
+AcceptanceExpectation {
+  kind             "acceptance"
+  over             string            수용 여부를 판정할 파라미터
+  accepted         boolean           명세가 그 입력을 받는다(true) 거절한다(false)
+}
 
 ValueExpectation {
   kind             "value"
@@ -169,7 +196,9 @@ Relation         = enum(decomposition, removal, irrelevant-addition,
                         equivalent-representation, idempotence, permutation)
 ```
 
-각 `Relation` 이 무엇을 단언하는지는 `techniques/bb-metamorphic-relation.md` 에 있습니다.
+각 `Relation` 이 무엇을 단언하는지는 `techniques/bb-metamorphic-relation.md` 에 있습니다. `caseRefs` 의 첫 원소가 source input 이고 나머지가 follow-up input 입니다. `removal` 과 `irrelevant-addition` 은 순서가 바뀌면 단언의 뜻이 뒤집힙니다.
+
+`AcceptanceExpectation` 은 명세가 「이 형식을 받는다 / 거절한다」만 정하고 결과 값이나 오류 종류는 정하지 않을 때 씁니다. 주로 `syntax-based` 가 씁니다. 거절은 `over` 파라미터를 이유로 든 입력 거절이면 성립하고, 다른 파라미터를 이유로 든 거절은 이 단언의 대상이 아닙니다.
 
 `path` 는 점 표기와 인덱스를 씁니다 — `a.b`, `a[0].b`.
 
@@ -395,8 +424,8 @@ Summary {
 
 | reach | 조건 |
 |---|---|
-| `reached` | 줄 커버리지로 목표 줄(WB 는 `basisRefs` 의 줄)이 실행된 것을 확인했거나, 케이스가 기대한 종류의 결과(값, 또는 기대한 `errorType`)가 나왔습니다 |
-| `unreached` | 케이스는 값이나 다른 `errorType` 을 기대했는데 대상이 입력 거절 예외로 끝났거나, 줄 커버리지에서 목표 줄이 실행되지 않았습니다 |
+| `reached` | 줄 커버리지로 목표 줄(WB 는 `basisRefs` 의 줄)이 실행된 것을 확인했거나, 케이스가 기대한 종류의 결과(값, 또는 기대한 `errorType`)가 나왔습니다. `acceptance` 케이스는 수용됐거나 `over` 파라미터를 이유로 거절됐습니다 |
+| `unreached` | 케이스는 값이나 다른 `errorType` 을 기대했는데 대상이 입력 거절 예외로 끝났거나, 줄 커버리지에서 목표 줄이 실행되지 않았습니다. `acceptance` 케이스는 `over` 가 아닌 다른 파라미터를 이유로 거절됐습니다 |
 | `unknown` | 위 둘 중 어느 쪽도 판정할 근거가 없습니다 |
 
 `rejection` 은 예외 메시지 한 줄이 아니라 대상이 돌려준 거절 이유 목록 전부입니다. 이게 없으면 `unreached` 가 왜 났는지 가를 수 없습니다.
@@ -478,14 +507,26 @@ Classification = enum(spec-defect, test-defect,
 두 지표를 **같은 식**으로 계산합니다.
 
 ```
-coverage(basis) = |{ CI : basis(CI) = basis ∧ ∃ case → CI, counted(case) }|
-                  ─────────────────────────────────────────────────────────
+coverage(basis) = |{ CI : basis(CI) = basis ∧ covered(CI) }|
+                  ─────────────────────────────────────────
                   |{ CI : basis(CI) = basis }|
 
-counted(case)   = status(case) ∈ { pass, fail } ∧ reach(case) ≠ unreached
+covered(CI)     = technique(CI) ∈ GroupTechnique
+                    ? |cases → CI| ≥ 2 ∧ ∀ case → CI, counted(case)
+                    : ∃ case → CI, counted(case)
+
+counted(case)   = status(case) ∈ { pass, fail }
+                  ∧ ( technique(case) ∈ PathTechnique
+                        ? reach(case) = reached
+                        : reach(case) ≠ unreached )
 ```
 
 케이스가 있어도 `skipped`, `error`, `unresolved`, `reach: unreached` 면 그 커버리지 항목은 덮이지 않은 것으로 셉니다. 케이스를 만들었다는 것과 그 케이스가 목표 동작을 실행했다는 것은 다릅니다.
+
+두 가지는 더 엄격하게 셉니다.
+
+- **`GroupTechnique`**: relation 의 metamorphic group, mcdc 의 independence pair 는 케이스 하나로는 아무것도 보여 주지 않습니다. 묶음의 케이스가 전부 `counted` 여야 덮입니다.
+- **`PathTechnique`**: 경로를 지났는지는 결과 종류로 알 수 없습니다. 줄 커버리지로 `reach: reached` 를 확인한 케이스만 셉니다. `unknown` 은 세지 않습니다.
 
 | 지표 | basis |
 |---|---|

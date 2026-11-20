@@ -266,7 +266,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload .beaker/<target>/bas
 | 3 | `<public-interface>` | 선언부 — 대상 언어 문법 그대로 | `basis/interface.md` |
 | 4 | `<public-types>` | 시그니처에서 도달 가능한 타입 정의 | `basis/interface.md` |
 | 5 | `<technique-hint>` | (선택) 제안 기법 | 오케스트레이터 판단 |
-| 6 | `<techniques>` | `techniques/index.md` 와 `techniques/bb-*.md` 문서 원문 | 정적 참조 문서 |
+| 6 | `<techniques>` | `techniques/index.md` 와, 그 「설계 기법」 표에서 쓰는 설계자에 BB 가 있는 문서(`bb-*.md` 중 technique 인 것과 `wb-mcdc.md`), 그리고 `bb-pairwise.md`, `bb-cause-effect-graph.md` 원문 | 정적 참조 문서 |
 | 7 | `<schemas>` | `references/schemas.md` 원문 | 정적 참조 문서 |
 
 6, 7번은 서브에이전트가 파일을 읽을 수 없어서 오케스트레이터가 정적 참조 문서를 그대로 실어 주는 것입니다. 코드 유래 정보가 아닙니다. 요약하거나 고쳐 싣지 마세요.

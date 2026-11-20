@@ -123,3 +123,5 @@ beaker blackbox <대상 심볼>
 | 도달 보강 반복이 케이스 입력값을 건드리지 않고 픽스처 빌더만으로 채웁니까 | **미확인** |
 | `metamorphic-relation` 케이스가 relation 단언으로 번역됩니까 | **미확인** |
 | incident 닫기의 범위 케이스와 `adopt` 가 계약대로 돕니까 | **미확인** |
+| 새 설계 기법 10종(classification-tree, combinatorial-t-way, scenario, syntax-based, error-guessing, mcdc, multiple-condition-coverage, all-uses, edge-pair-coverage, prime-path-coverage)이 설계자 출력과 리포트 집계에서 계약대로 돕니까 | **미확인** |
+| 손으로 짠 covering array 의 tuple 주장을 확인하는 검사 스크립트 | **없음**. `bb-pairwise.md`, `bb-combinatorial-t-way.md` 가 제안한 후속 과제 |

@@ -41,6 +41,10 @@ model: sonnet
 | `unreached` | 값이나 다른 `errorType` 을 기대했는데 대상이 입력 거절 오류로 끝났습니다. 또는 줄 커버리지에서 목표 줄이 실행되지 않았습니다 |
 | `unknown` | 위 둘 중 어느 쪽도 판정할 근거가 없습니다 |
 
+`acceptance` 케이스는 수용 판정 자체가 목표 동작입니다. 입력이 수용됐거나 `over` 파라미터를 이유로 거절됐으면 `reached`, 다른 파라미터를 이유로 거절됐으면 `unreached` 입니다.
+
+케이스의 `technique` 이 경로를 세는 기법(`all-uses`, `edge-pair-coverage`, `prime-path-coverage`)이면 결과 종류로 `reached` 를 주지 않습니다. 줄 커버리지로 그 경로의 줄이 모두 실행된 것을 확인했을 때만 `reached` 이고, 확인하지 못하면 `unknown` 입니다.
+
 러너가 줄 커버리지를 낼 수 있으면 켜서 돌리고 그걸 우선 씁니다. 켤 수 없으면 결과 종류로 판정합니다. 판단이 서지 않으면 `unknown` 이고, `reached` 로 올려 잡지 않습니다.
 
 대상이 입력을 거절했으면 거절 이유 목록 **전부**를 `rejection` 에 원문으로 넣습니다. 첫 줄만 넣지 마세요.

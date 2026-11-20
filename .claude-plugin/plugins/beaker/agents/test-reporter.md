@@ -50,7 +50,7 @@ MergedTestCase {
 
 **도달률을 먼저 셉니다.** `results/test-results.json` 의 `summary.reachRate` 와 `unreached` 수입니다. `unreached` 가 1건이라도 있으면 이번 결과는 완료가 아닙니다. 리포트 첫 줄에 「미완료: 목표 동작에 닿지 못한 케이스 <n>건」을 쓰고, 오케스트레이터에게 같은 사실을 반환합니다.
 
-두 커버리지를 **같은 방식**으로 계산합니다: _coverage item 중 연결된 테스트 케이스가 1개 이상이고, 그 케이스가 실제로 목표 동작을 실행한 비율._ 케이스의 `status` 가 `pass` 나 `fail` 이고 `reach` 가 `unreached` 가 아니어야 셉니다. `skipped`, `error`, `unresolved`, `unreached` 케이스만 연결된 커버리지 항목은 덮이지 않은 것입니다. 케이스를 만들었다는 것과 그 케이스가 목표 동작을 실행했다는 것은 다릅니다.
+두 커버리지를 **같은 방식**으로 계산합니다: _coverage item 중 연결된 테스트 케이스가 1개 이상이고, 그 케이스가 실제로 목표 동작을 실행한 비율._ 케이스의 `status` 가 `pass` 나 `fail` 이고 `reach` 가 `unreached` 가 아니어야 셉니다. 경로를 세는 기법(`all-uses`, `edge-pair-coverage`, `prime-path-coverage`)은 `reach: reached` 만 세고, 묶음이 필요한 기법(`metamorphic-relation`, `mcdc`)은 그 항목에 연결된 케이스가 2개 이상이고 전부 세어져야 덮입니다. 정확한 식은 `${CLAUDE_PLUGIN_ROOT}/references/schemas.md` 의 「커버리지 계산」 절입니다. `skipped`, `error`, `unresolved`, `unreached` 케이스만 연결된 커버리지 항목은 덮이지 않은 것입니다. 케이스를 만들었다는 것과 그 케이스가 목표 동작을 실행했다는 것은 다릅니다.
 
 | 지표                 | basis         | 뜻                                                |
 | -------------------- | ------------- | ------------------------------------------------- |

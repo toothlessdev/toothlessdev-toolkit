@@ -84,7 +84,7 @@ claude plugin install bfs@toothlessdev-toolkit
 | 플러그인                                | 하는 일                                                 | 실행                                      |
 | --------------------------------------- | ------------------------------------------------------- | ----------------------------------------- |
 | [adhd](.claude-plugin/plugins/adhd)     | 작업 마비 부수기, 체크인 같은 실행 지원 도구            | `/adhd:paralysis`, `/adhd:checkin` 등     |
-| [beaker](.claude-plugin/plugins/beaker) | 명세와 구현에서 테스트를 따로 만들어 불일치를 찾습니다  | `/beaker:beaker`                          |
+| [beaker](.claude-plugin/plugins/beaker) | 명세와 구현에서 테스트를 따로 만들어 불일치를 찾습니다  | `/beaker:beaker`, 기법 스킬 `/beaker:techniques` 등 |
 | [bfs](.claude-plugin/plugins/bfs)       | 확정한 목록을 나눠 병렬로 처리합니다                    | `/bfs:run`, `/bfs:plan`, `/bfs:recursive` |
 | [deck](.claude-plugin/plugins/deck)     | 모핑 스토리보드부터 구현, 내용 검사까지 장표를 만듭니다 | `/deck:deck`                              |
 | [talkie](.claude-plugin/plugins/talkie) | 장표에 대본, 음성, 자막, 재생 컨트롤을 입힙니다         | `/talkie:talkie`                          |

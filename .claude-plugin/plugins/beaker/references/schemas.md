@@ -26,6 +26,7 @@ TypeName {
 | 접두사 | 대상 | 비고 |
 |---|---|---|
 | `REQ-` | 명세 항목 | 원문의 번호 체계를 따릅니다 |
+| `OBL-` | 상대 컴포넌트가 질 의무 | 대상이 아니라 다른 컴포넌트가 지켜야 하는 명세 문장 |
 | `TC-` | Test Condition | code basis 는 100 번대부터 |
 | `CI-` | Test Coverage Item | code basis 는 100 번대부터 |
 | `BB-` | Test Case (basis: specification) | |
@@ -43,17 +44,57 @@ Technique        = enum(equivalence-partitioning,
                         boundary-value-analysis,
                         decision-table,
                         state-transition,
-                        branch-condition)
+                        metamorphic-relation,
+                        classification-tree,
+                        combinatorial-t-way,
+                        scenario,
+                        syntax-based,
+                        error-guessing,
+                        mcdc,
+                        branch-condition,
+                        multiple-condition-coverage,
+                        all-uses,
+                        edge-pair-coverage,
+                        prime-path-coverage)
+
+PathTechnique    = enum(all-uses, edge-pair-coverage, prime-path-coverage)
+
+GroupTechnique   = enum(metamorphic-relation, mcdc)
 
 PredicateClass   = enum(business-rule, defensive, infrastructural)
+
+SpecGrade        = enum(external, quoted, authored)
 
 BasisRef         = string            basis=specification → REQ- ID
                                      basis=code          → "파일경로:행번호"
 ```
 
-`Technique` 은 위 5종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다.
+`Technique` 은 위 16종뿐입니다. 목록에 없는 이름을 쓰면 리포트 단계에서 커버리지 집계가 깨집니다. 기법마다 쓰는 설계자와 Coverage Item 단위는 `beaker:techniques` 스킬(`skills/techniques/SKILL.md`)에 있습니다. 기준으로만 쓰는 스킬(`beaker:wb-node-coverage` 등)의 이름은 `Technique` 값이 아닙니다.
+
+`PathTechnique` 은 경로를 세는 기법이고, `GroupTechnique` 은 케이스 여러 개가 함께 있어야 Coverage Item 하나가 덮이는 기법입니다. 둘 다 아래 「커버리지 계산」에서 더 엄격하게 셉니다.
 
 `PredicateClass` 는 셋 다 커버리지 항목이 되지만 **incident 후보는 `business-rule` 뿐입니다.**
+
+`SpecGrade` 는 명세 항목이 언제 누가 쓴 것인지입니다. 판정 규칙은 `references/process.md` 의 「출처 등급」 절에 있습니다.
+
+---
+
+## basis/requirements.md
+
+마크다운이지만 형식이 계약입니다. 다음 단계가 ID 와 등급을 이 형식으로 읽습니다.
+
+```markdown
+## 요구사항
+- REQ-<n> [<SpecGrade>] <원문>
+  - 출처: <파일 경로 또는 location>
+
+## 상대 컴포넌트 의무
+- OBL-<n> [<SpecGrade>] <원문>
+  - 출처: <파일 경로 또는 location>
+  - 의무를 지는 쪽: <원문이 지목한 컴포넌트>
+```
+
+`## 상대 컴포넌트 의무` 절은 해당 문장이 없으면 생략합니다. `OBL-` 항목은 블랙박스 설계의 근거가 아니라 reporter 가 확인할 목록입니다.
 
 ---
 
@@ -70,8 +111,10 @@ TestCondition {
   basis            Basis
   statement        string            검증 가능한 성질 한 문장
   basisRefs        BasisRef[]        1개 이상
-  predicate        string | null     basis=code 에서만. 원자 조건 원문
+  predicate        string | null     basis=code 에서만. 원자 조건 원문, 또는 predicateScope=decision 이면 결정 전체 원문
   predicateClass   PredicateClass | null   basis=code 에서만
+  predicateScope   enum(decision, condition) | null   basis=code 에서만
+  decisionRef      Ref<TestCondition> | null    predicateScope=condition 일 때 그 조건이 속한 결정 수준 TC
   coverageItems    CoverageItem[]    1개 이상
 }
 
@@ -83,6 +126,8 @@ CoverageItem {
 ```
 
 `predicate` 와 `predicateClass` 는 함께 채우거나 함께 `null` 입니다. 한쪽만 있으면 스키마 위반입니다.
+
+`predicateScope` 는 결정 결과를 세는 Test Condition(`decision`)과 원자 조건 값을 세는 Test Condition(`condition`)을 가릅니다. `branch-condition`, `mcdc`, `multiple-condition-coverage` 가 이 구분을 씁니다. 원자 조건이 하나뿐인 결정은 `decision` 하나로 둡니다. 결정이 하나도 없는 대상의 진입 실행 Test Condition 은 `predicate`, `predicateClass`, `predicateScope` 가 모두 `null` 입니다. `basis=code` 에서 세 필드가 `null` 인 것은 이 경우뿐입니다.
 
 ---
 
@@ -105,8 +150,12 @@ TestCase {
   inputs           object            파라미터 이름 → 값
   expected         Expected
   expectedDescription  string        사람이 읽을 한 문장
+  pins             PredicateClass | null   basis=code 에서만. 이 케이스가 고정하는 predicate 의 class
+  resolves         Ref<Incident>[]?        incident 닫기에서 만든 범위 케이스만
 }
 ```
+
+`pins` 가 `business-rule` 인 케이스는 현재 동작을 고정했을 뿐 옳은지는 검증하지 않았습니다. 사람이 확인하기 전에는 `adopt` 가 저장소에 넣지 않습니다.
 
 `rationale` 이 비면 그 케이스는 근거가 없습니다. "BVA 를 썼다"가 아니라 **명세의 어느 성질을 어떤 논리로 겨냥하는지**를 적습니다.
 
@@ -116,6 +165,13 @@ TestCase {
 
 ```
 Expected = ValueExpectation | ThrowsExpectation | RelationExpectation
+         | AcceptanceExpectation
+
+AcceptanceExpectation {
+  kind             "acceptance"
+  over             string            수용 여부를 판정할 파라미터
+  accepted         boolean           명세가 그 입력을 받는다(true) 거절한다(false)
+}
 
 ValueExpectation {
   kind             "value"
@@ -131,11 +187,18 @@ ThrowsExpectation {
 
 RelationExpectation {
   kind             "relation"
-  relation         string            관계 이름
+  relation         Relation
   over             string            관계가 성립하는 파라미터
   caseRefs         Ref<TestCase>[]   비교 대상 케이스. 2개 이상
 }
+
+Relation         = enum(decomposition, removal, irrelevant-addition,
+                        equivalent-representation, idempotence, permutation)
 ```
+
+각 `Relation` 이 무엇을 단언하는지는 `beaker:bb-metamorphic-relation` 스킬에 있습니다. `caseRefs` 의 첫 원소가 source input 이고 나머지가 follow-up input 입니다. `removal` 과 `irrelevant-addition` 은 순서가 바뀌면 단언의 뜻이 뒤집힙니다.
+
+`AcceptanceExpectation` 은 명세가 「이 형식을 받는다 / 거절한다」만 정하고 결과 값이나 오류 종류는 정하지 않을 때 씁니다. 주로 `syntax-based` 가 씁니다. 거절은 `over` 파라미터를 이유로 든 입력 거절이면 성립하고, 다른 파라미터를 이유로 든 거절은 이 단언의 대상이 아닙니다.
 
 `path` 는 점 표기와 인덱스를 씁니다 — `a.b`, `a[0].b`.
 
@@ -279,6 +342,7 @@ ImplementerOutput {
   scripts          Script[]
   dataFile         string | null
   unresolved       Unresolved[]
+  inputFills       InputFill[]
 }
 
 Script {
@@ -289,9 +353,19 @@ Script {
 
 Unresolved {
   caseId           Ref<TestCase>
-  reason           string            이 러너에서 표현할 수 없었던 것
+  reason           string            이 러너에서 표현할 수 없었던 것, 또는 만들 수 없었던 전제 상태
+}
+
+InputFill {
+  caseId           Ref<TestCase>
+  fields           string[]          케이스 inputs 에 없어서 채운 필드 경로
+  source           string            채우는 데 쓴 저장소의 픽스처 빌더 "파일경로:행번호"
 }
 ```
+
+`unresolved` 에 들어간 케이스는 스크립트에 없고, 커버되지 않은 것으로 셉니다. 건너뛰기 표시를 단 시험으로 대신 쓰지 않습니다.
+
+`inputFills` 는 케이스가 값을 정하지 않은 필드만 담습니다. 케이스 `inputs` 에 있는 값은 바꾸지 않습니다.
 
 `basis` 가 `layout.specTarget` / `layout.codeTarget` 중 어느 쪽을 쓸지 정합니다. 경로를 스스로 고르지 마세요.
 
@@ -319,15 +393,21 @@ Result {
   caseId           Ref<TestCase>
   basis            Basis
   status           enum(pass, fail, error, skipped)
+  reach            Reach
+  reachEvidence    string            reach 를 그렇게 판정한 근거 한 줄
   scriptRef        string            "파일경로:행번호"
   expected         Expected          케이스에서 그대로 복사
   actual           object | null     관찰된 값. status=pass 면 생략 가능
   message          string | null     러너가 낸 실패 메시지
+  rejection        string[] | null   대상이 입력을 거절했을 때 거절 이유 목록 원문 전부
   durationMs       number
 }
 
+Reach            = enum(reached, unreached, unknown)
+
 Summary {
-  total, pass, fail, error, skipped   number
+  total, pass, fail, error, skipped, unreached   number
+  reachRate        number            reached / (total - unknown). 0~1
 }
 ```
 
@@ -335,8 +415,20 @@ Summary {
 
 | status | 뜻 | 다음 단계의 해석 |
 |---|---|---|
-| `fail` | 실행됐고 단언이 틀렸습니다 | 명세/구현 불일치 후보 |
+| `fail` | 실행됐고 단언이 틀렸습니다 | `reach` 가 `reached` 면 명세/구현 불일치 후보 |
 | `error` | 실행 자체가 안 됐습니다 | 대부분 도구 문제 |
+
+### reach: 목표 동작까지 갔는가
+
+`status` 는 단언이 맞았는지만 말합니다. 대상이 입력을 앞단에서 거절해 목표 동작에 닿지 못하고 끝난 실행도 `fail` 로 나옵니다. 이 둘을 섞으면 「입력이 모자라서 끝난 시험」이 「불일치를 찾은 시험」으로 읽히고, 커버리지도 거짓으로 올라갑니다.
+
+| reach | 조건 |
+|---|---|
+| `reached` | 줄 커버리지로 목표 줄(WB 는 `basisRefs` 의 줄)이 실행된 것을 확인했거나, 케이스가 기대한 종류의 결과(값, 또는 기대한 `errorType`)가 나왔습니다. `acceptance` 케이스는 수용됐거나 `over` 파라미터를 이유로 거절됐습니다 |
+| `unreached` | 케이스는 값이나 다른 `errorType` 을 기대했는데 대상이 입력 거절 예외로 끝났거나, 줄 커버리지에서 목표 줄이 실행되지 않았습니다. `acceptance` 케이스는 `over` 가 아닌 다른 파라미터를 이유로 거절됐습니다 |
+| `unknown` | 위 둘 중 어느 쪽도 판정할 근거가 없습니다 |
+
+`rejection` 은 예외 메시지 한 줄이 아니라 대상이 돌려준 거절 이유 목록 전부입니다. 이게 없으면 `unreached` 가 왜 났는지 가를 수 없습니다.
 
 ---
 
@@ -355,14 +447,27 @@ Incident {
   reasoning        string            이 분류를 제안하는 근거 한 문장
   evidence         Evidence
   action           "human-review-required"
+  status           enum(open, closed)        만들 때는 항상 open
+  resolution       Resolution | null         만들 때는 항상 null. references/resolution.md 가 채운다
 }
 
 Evidence {
   caseIds          Ref<TestCase>[]
   basisRefs        BasisRef[]
   locations        BasisRef[]
+  specGrades       SpecGrade[]       basisRefs 의 REQ- 마다 등급
   specBoundary     string?           경계 불일치일 때만
   observedBoundary string?           경계 불일치일 때만
+  obligationRef    string?           counterpart-obligation-unverified 일 때 OBL- ID
+}
+
+Resolution {
+  by               enum(implementation-fix, spec-change, test-fix, wont-fix)
+  range            string | null     implementation-fix 일 때 반례가 속한 입력 범위
+  dataConsequence  string | null     spec-change 일 때 데이터가 어떻게 되는지 한 줄
+  reason           string | null     test-fix 의 명세 근거, wont-fix 의 이유
+  verifiedRunId    string | null     닫힘을 확인한 실행의 runId
+  blockedBy        string[]          닫힘 조건 중 거짓인 것
 }
 
 IncidentKind = enum(requirement-implementation-discrepancy,
@@ -370,7 +475,8 @@ IncidentKind = enum(requirement-implementation-discrepancy,
                     possible-missing-implementation,
                     ambiguous-requirement,
                     test-defect-suspected,
-                    context-leak-suspected)
+                    context-leak-suspected,
+                    counterpart-obligation-unverified)
 
 Classification = enum(spec-defect, test-defect,
                       implementation-defect, ambiguous-requirement)
@@ -380,12 +486,15 @@ Classification = enum(spec-defect, test-defect,
 
 | kind | 조건 |
 |---|---|
-| `requirement-implementation-discrepancy` | `basis: specification` 케이스가 `fail` |
-| `unexplained-implementation-behavior` | 명세 근거 없는 `business-rule` predicate |
+| `requirement-implementation-discrepancy` | `basis: specification` 케이스가 `fail` 이고 `reach: reached` |
+| `unexplained-implementation-behavior` | 명세 근거 없는 `business-rule` predicate. 명세가 범위 밖이라고 뺀 영역의 predicate 도 여기 |
 | `possible-missing-implementation` | 명세 항목에 대응하는 predicate 없음 |
 | `ambiguous-requirement` | 설계 단계가 올린 `Ambiguity` |
 | `test-defect-suspected` | `error` 이거나 기대값이 명세와 어긋나 보임 |
 | `context-leak-suspected` | leak 검사 실패 또는 `LeakSuspect` |
+| `counterpart-obligation-unverified` | `OBL-` 의무를 지는 쪽의 코드나 문서를 찾지 못했거나, 픽스처가 그 의무의 결과를 손으로 만들어 넣음 |
+
+`fail` 이지만 `reach: unreached` 인 케이스는 incident 가 아닙니다. 리포트의 「도달하지 못한 케이스」 절로 가고, 입력 보강 대상이 됩니다(`references/process.md` 의 Step 7).
 
 ### classification
 
@@ -398,10 +507,26 @@ Classification = enum(spec-defect, test-defect,
 두 지표를 **같은 식**으로 계산합니다.
 
 ```
-coverage(basis) = |{ CI : basis(CI) = basis ∧ ∃ case → CI }|
+coverage(basis) = |{ CI : basis(CI) = basis ∧ covered(CI) }|
                   ─────────────────────────────────────────
                   |{ CI : basis(CI) = basis }|
+
+covered(CI)     = technique(CI) ∈ GroupTechnique
+                    ? |cases → CI| ≥ 2 ∧ ∀ case → CI, counted(case)
+                    : ∃ case → CI, counted(case)
+
+counted(case)   = status(case) ∈ { pass, fail }
+                  ∧ ( technique(case) ∈ PathTechnique
+                        ? reach(case) = reached
+                        : reach(case) ≠ unreached )
 ```
+
+케이스가 있어도 `skipped`, `error`, `unresolved`, `reach: unreached` 면 그 커버리지 항목은 덮이지 않은 것으로 셉니다. 케이스를 만들었다는 것과 그 케이스가 목표 동작을 실행했다는 것은 다릅니다.
+
+두 가지는 더 엄격하게 셉니다.
+
+- **`GroupTechnique`**: relation 의 metamorphic group, mcdc 의 independence pair 는 케이스 하나로는 아무것도 보여 주지 않습니다. 묶음의 케이스가 전부 `counted` 여야 덮입니다.
+- **`PathTechnique`**: 경로를 지났는지는 결과 종류로 알 수 없습니다. 줄 커버리지로 `reach: reached` 를 확인한 케이스만 셉니다. `unknown` 은 세지 않습니다.
 
 | 지표 | basis |
 |---|---|

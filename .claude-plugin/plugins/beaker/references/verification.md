@@ -1,13 +1,13 @@
 # beaker 검증
 
-`<skill>` 은 이 스킬의 디렉터리입니다.
+`${CLAUDE_PLUGIN_ROOT}` 는 beaker 플러그인의 루트입니다. 설치본이면 `~/.claude/plugins/cache/<마켓플레이스>/beaker/<버전>/` 입니다.
 
 ## 설치 확인
 
-설치한 호스트의 스킬 목록에 `beaker` 가 보여야 합니다. 스킬 디렉터리에 아래가 모두 있는지도 봅니다.
+설치한 호스트의 스킬 목록에 `beaker` 가 보여야 합니다. 플러그인 루트에 아래가 모두 있는지도 봅니다.
 
 ```bash
-ls <skill>/SKILL.md <skill>/references/process.md <skill>/scripts <skill>/../../agents
+ls ${CLAUDE_PLUGIN_ROOT}/skills/beaker/SKILL.md ${CLAUDE_PLUGIN_ROOT}/references ${CLAUDE_PLUGIN_ROOT}/skills/techniques ${CLAUDE_PLUGIN_ROOT}/scripts ${CLAUDE_PLUGIN_ROOT}/agents
 ```
 
 `agents/` 에는 에이전트 정의 6개가 있어야 합니다. `blackbox-test-designer` 의 frontmatter 가 **파일·검색·셸 도구 없음** 인지 확인합니다. 서브에이전트를 이 조건으로 호출할 수 있는지가 격리 강도(`structural` / `payload-only`)를 정합니다.
@@ -31,13 +31,13 @@ printf 'f(x: number, threshold = ?) -> number\n' > clean.md
 ```
 
 ```bash
-node <skill>/scripts/check-leak.mjs --payload leaky.md --impl impl.js --spec spec.md
+node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload leaky.md --impl impl.js --spec spec.md
 ```
 
 `[implementation-literal-in-payload] 60` 이 나오고 exit code 1 이면 정상입니다. 명세에 있는 `65` 는 잡히지 않아야 합니다.
 
 ```bash
-node <skill>/scripts/check-leak.mjs --payload clean.md --impl impl.js --spec spec.md
+node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload clean.md --impl impl.js --spec spec.md
 ```
 
 `leak 없음` 과 exit code 0 이 나와야 합니다.
@@ -45,13 +45,13 @@ node <skill>/scripts/check-leak.mjs --payload clean.md --impl impl.js --spec spe
 body 가 통째로 섞인 경우도 확인합니다.
 
 ```bash
-cp impl.js bodyleak.md && node <skill>/scripts/check-leak.mjs --payload bodyleak.md --impl impl.js --spec spec.md
+cp impl.js bodyleak.md && node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload bodyleak.md --impl impl.js --spec spec.md
 ```
 
 총 4건이 나오고 그중 `shared-token-window` 3건이 포함되어야 합니다. 두 규칙이 함께 잡는 것이 정상입니다. 상수 하나가 새는 것과 선언부 발췌가 body 를 잘라온 것은 다른 실패입니다.
 
 ```bash
-node <skill>/scripts/check-leak.mjs --payload bodyleak.md --impl impl.js --spec spec.md --json
+node ${CLAUDE_PLUGIN_ROOT}/scripts/check-leak.mjs --payload bodyleak.md --impl impl.js --spec spec.md --json
 ```
 
 `--json` 으로 규칙별 집계를 확인할 수 있습니다.
@@ -119,3 +119,9 @@ beaker blackbox <대상 심볼>
 | 도구 제한을 걸 수 없는 호스트에서 `payload-only` 가 anchoring 을 실제로 막습니까 | **미확인** |
 | 배치 해석 3전략이 실제 저장소에서 갈립니까 | **미확인** |
 | baseline 대비 결함 탐지율이 개선됩니까 | **미확인**. 벤치마크에서 측정 |
+| executor 가 `reach` 를 결과 종류만으로 가를 때 `unreached` 를 빠짐없이 잡습니까 | **미확인** |
+| 도달 보강 반복이 케이스 입력값을 건드리지 않고 픽스처 빌더만으로 채웁니까 | **미확인** |
+| `metamorphic-relation` 케이스가 relation 단언으로 번역됩니까 | **미확인** |
+| incident 닫기의 범위 케이스와 `adopt` 가 계약대로 돕니까 | **미확인** |
+| 새 설계 기법 10종(classification-tree, combinatorial-t-way, scenario, syntax-based, error-guessing, mcdc, multiple-condition-coverage, all-uses, edge-pair-coverage, prime-path-coverage)이 설계자 출력과 리포트 집계에서 계약대로 돕니까 | **미확인** |
+| 손으로 짠 covering array 의 tuple 주장을 확인하는 검사 스크립트 | **없음**. `beaker:bb-pairwise`, `beaker:bb-combinatorial-t-way` 가 제안한 후속 과제 |

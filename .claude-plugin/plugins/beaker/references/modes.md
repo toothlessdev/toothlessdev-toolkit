@@ -8,7 +8,10 @@
 | `blackbox` | `blackbox` | 명세만 | **필수. 없으면 종료** | `basis: specification` |
 | `whitebox` | `whitebox` | 구현만 | 선택 | `basis: code` |
 | `run` | `rerun` | | | 재실행만 |
+| `adopt` | `references/adopt.md` | 이전 실행 결과 | | 저장소 규약을 따른 시험 |
 | `pr-review` | `references/pr-review.md` | PR 에서 추출 | 등급을 매겨 사용 | worktree 안에서만 |
+
+모든 모드에서 명세 항목에는 출처 등급(`external` / `quoted` / `authored`)을 붙입니다. 판정 규칙은 `references/process.md` 의 「출처 등급」 절입니다.
 
 ---
 
@@ -77,6 +80,19 @@ stages:         execute → report
 케이스가 불완전해 보여도 재생성하지 마세요. 재생성하면 구현 변경과 케이스 변경이 섞여 무엇이 달라졌는지 판별할 수 없게 됩니다. 케이스를 고쳐야 한다고 판단되면 그 사실을 보고하고 멈춥니다.
 
 `design/test-cases.json` 또는 `environment/runner-profile.json` 이 없으면 종료하고, `test` 나 `blackbox` 모드를 먼저 돌리라고 안내합니다. 없는 걸 만들어내지 마세요.
+
+incident 닫기(`references/resolution.md`)가 범위 케이스를 append 한 뒤의 확인 실행도 이 모드로 돕니다. 이때 새로 생긴 것은 `resolves` 가 붙은 케이스뿐이고, 기존 케이스는 그대로입니다.
+
+## adopt
+
+```
+designers:      (없음)
+stages:         select → implement(adopt) → execute
+```
+
+`references/adopt.md` 를 읽고 진행합니다. 실행용으로 만든 시험과 별개로 저장소 규약을 따른 시험을 만듭니다. 케이스 ID 표시를 남기지 않고, 사람이 확인하지 않은 characterization(`pins: business-rule`)과 도달하지 못한 케이스는 넣지 않습니다.
+
+`results/test-results.json` 이 없으면 종료하고 `test` 나 `run` 을 먼저 돌리라고 안내합니다.
 
 ## pr-review
 

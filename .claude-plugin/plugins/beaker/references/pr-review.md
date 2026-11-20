@@ -93,7 +93,7 @@ beaker 는 JSDoc 을 Test Basis 에서 제외합니다. 코드 옆에서 코드�
 diff 는 이렇게 만듭니다.
 
 ```bash
-git -C <repo> -c core.attributesFile=<skill>/scripts/diff-attributes diff -U0 <baseRef>...<headSha> > <WORK>/pr/diff.patch
+git -C <repo> -c core.attributesFile=${CLAUDE_PLUGIN_ROOT}/scripts/diff-attributes diff -U0 <baseRef>...<headSha> > <WORK>/pr/diff.patch
 ```
 
 `diff-attributes` 는 Java, PHP, Kotlin 등 git 내장 diff 드라이버를 확장자에 연결합니다. 드라이버가 없으면 git 기본 패턴은 들여쓰기된 메서드 대신 바깥 class 선언 줄을 hunk header 에 찍어서, 한 클래스의 메서드 변경이 전부 클래스 하나로 묶입니다. 저장소의 `.gitattributes` 에 설정이 있으면 그쪽이 우선합니다.
@@ -214,7 +214,7 @@ Reference {
 ### 6.1 추출
 
 ```bash
-node <skill>/scripts/extract-symbols.mjs --diff <WORK>/pr/diff.patch --json
+node ${CLAUDE_PLUGIN_ROOT}/scripts/extract-symbols.mjs --diff <WORK>/pr/diff.patch --json
 ```
 
 결과를 `targets/symbols.json` 으로 저장합니다. `warning` 이 `null` 이 아니면 diff 를 다시 만듭니다.
